@@ -1,0 +1,16 @@
+{
+  "name": "cotizatuweb",
+  "version": "1.0.0",
+  "description": "Cotizador web de CotizaTuWeb (Codigo RM Desarrolladores)",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server.js",
+    "crear-admin": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/crear-admin.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
+    "respaldo": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/respaldo.js"
+  }
+}

@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Panel · CotizaTuWeb</title>
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/admin/admin.css">
+  <script type="module" src="/admin/admin.js"></script>
+</head>
+<body class="adm">
+  <section class="login" id="login" hidden>
+    <form class="login-card" id="login-form" novalidate>
+      <a class="brand" href="/"><img src="/img/favicon.svg" alt="" width="34" height="34"><span class="brand-name">Cotiza<span>TuWeb</span></span></a>
+      <h1>Panel administrativo</h1>
+      <label class="field"><span>Usuario</span><input name="username" autocomplete="username" required></label>
+      <label class="field"><span>Contraseña</span><input name="password" type="password" autocomplete="current-password" required></label>
+      <p class="status error" id="login-error" hidden></p>
+      <button class="btn btn-primary" type="submit">Ingresar</button>
+    </form>
+  </section>
+
+  <div class="app" id="app" hidden>
+    <aside class="side">
+      <a class="brand" href="/" target="_blank" rel="noopener"><img src="/img/favicon.svg" alt="" width="30" height="30"><span class="brand-name">Cotiza<span>TuWeb</span></span></a>
+      <nav class="side-nav" id="nav">
+        <button data-view="quotes" class="on">Cotizaciones</button>
+        <button data-view="services">Servicios</button>
+        <button data-view="features">Funcionalidades</button>
+        <button data-view="pricing">Precios y reglas</button>
+        <button data-view="recurring">Costos aparte</button>
+        <button data-view="settings">Configuración</button>
+      </nav>
+      <div class="side-foot">
+        <span id="who"></span>
+        <button class="btn btn-ghost btn-sm" id="logout">Cerrar sesión</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div id="alert" class="status" role="status" aria-live="polite" hidden></div>
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <dialog class="modal" id="modal">
+    <form method="dialog" class="modal-card" id="modal-form" novalidate>
+      <div class="modal-head"><h2 id="modal-title"></h2><button type="button" class="icon-btn" id="modal-x" aria-label="Cerrar">×</button></div>
+      <div class="modal-body" id="modal-body"></div>
+      <p class="status error" id="modal-error" hidden></p>
+      <div class="modal-foot"><button type="button" class="btn btn-ghost" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-ok">Guardar</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

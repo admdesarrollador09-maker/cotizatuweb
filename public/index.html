@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CotizaTuWeb · Cotiza tu página web en minutos</title>
+  <meta name="description" content="Cotiza el desarrollo de tu página web, tienda virtual o aplicación web. Elige lo que necesitas y conoce el precio al instante, en soles.">
+  <link rel="icon" href="/img/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script type="module" src="/js/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#cotizador">Ir al cotizador</a>
+
+  <header class="topbar">
+    <div class="wrap topbar-in">
+      <a class="brand" href="/" aria-label="CotizaTuWeb, inicio">
+        <img src="/img/favicon.svg" alt="" width="34" height="34">
+        <span class="brand-name">Cotiza<span>TuWeb</span></span>
+      </a>
+      <nav class="topnav" aria-label="Principal">
+        <a href="#como-funciona">Cómo funciona</a>
+        <a href="#cotizador">Cotizador</a>
+        <a href="#costos-aparte">Costos aparte</a>
+      </nav>
+      <a class="btn btn-ghost btn-sm" data-wa hidden target="_blank" rel="noopener">WhatsApp</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap hero-in">
+        <div class="hero-copy">
+          <h1>Tu próxima página web empieza aquí</h1>
+          <p class="lead">Elige el tipo de proyecto, marca lo que necesitas y mira el precio en soles al instante. Sin formularios eternos ni “te llamamos para darte un precio”.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary btn-lg" href="#cotizador">Cotiza tu página web</a>
+            <a class="btn btn-wa btn-lg" data-wa hidden target="_blank" rel="noopener">Hablar por WhatsApp</a>
+          </div>
+          <ul class="benefits">
+            <li><span class="b-ico" data-icon="eye"></span><div><strong>Presupuesto transparente</strong><span>Cada concepto con su precio. Sabes qué pagas y qué no.</span></div></li>
+            <li><span class="b-ico" data-icon="sliders"></span><div><strong>Proyecto personalizado</strong><span>Solo pagas por las funciones que tu negocio usa.</span></div></li>
+            <li><span class="b-ico" data-icon="message"></span><div><strong>Atención directa</strong><span>Hablas con quien desarrolla tu web, sin intermediarios.</span></div></li>
+          </ul>
+        </div>
+
+        <figure class="ticket" aria-label="Cotización de ejemplo">
+          <div class="ticket-head">
+            <span class="ticket-kind">Cotización de ejemplo</span>
+            <span class="ticket-num">CTW-0000</span>
+          </div>
+          <p class="ticket-service" id="sample-service">Cargando tarifas…</p>
+          <ul class="ticket-lines" id="sample-lines"></ul>
+          <div class="ticket-total">
+            <span>Total estimado</span>
+            <strong id="sample-total">—</strong>
+          </div>
+          <figcaption id="sample-note">Calculado con las tarifas vigentes.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="how" id="como-funciona">
+      <div class="wrap">
+        <h2>Cuatro pasos y tienes tu cotización</h2>
+        <ol class="how-steps">
+          <li><strong>Elige tu proyecto</strong><span>Desde una página para emprender hasta una aplicación a medida.</span></li>
+          <li><strong>Ajusta las características</strong><span>Páginas, diseño, idiomas, contenido y plazo.</span></li>
+          <li><strong>Suma funcionalidades</strong><span>WhatsApp, reservas, pagos en línea y más. Lo incluido no se cobra dos veces.</span></li>
+          <li><strong>Recibe tu cotización</strong><span>Descárgala en PDF, envíala por WhatsApp o pide una propuesta a medida.</span></li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="quoter" id="cotizador" aria-labelledby="quoter-title">
+      <div class="wrap quoter-in">
+        <div class="quoter-main">
+          <h2 id="quoter-title">Cotizador</h2>
+          <ol class="stepper" id="stepper" aria-label="Pasos del cotizador"></ol>
+
+          <form id="quote-form" novalidate autocomplete="on">
+            <fieldset class="step" data-step="1">
+              <legend>¿Qué tipo de proyecto necesitas?</legend>
+              <p class="step-help">Puedes cambiar de opción cuando quieras; tus demás elecciones se mantienen.</p>
+              <div class="services" id="services" role="radiogroup" aria-label="Tipo de proyecto"></div>
+            </fieldset>
+
+            <fieldset class="step" data-step="2" hidden>
+              <legend>Configura las características</legend>
+              <p class="step-help" id="pages-help"></p>
+              <div class="config" id="config"></div>
+            </fieldset>
+
+            <fieldset class="step" data-step="3" hidden>
+              <legend>Funcionalidades adicionales</legend>
+              <p class="step-help">Marca las que necesitas. Las que ya vienen en tu paquete aparecen como incluidas.</p>
+              <div class="features" id="features"></div>
+            </fieldset>
+
+            <fieldset class="step" data-step="4" hidden>
+              <legend>Tus datos</legend>
+              <p class="step-help">Los usamos solo para enviarte la cotización y conversar sobre tu proyecto.</p>
+              <div class="fields">
+                <label class="field"><span>Nombre y apellido *</span><input name="name" autocomplete="name" maxlength="100" required><small class="err" data-err="name"></small></label>
+                <label class="field"><span>Empresa o marca</span><input name="company" autocomplete="organization" maxlength="120"><small class="err" data-err="company"></small></label>
+                <label class="field"><span>Correo electrónico *</span><input name="email" type="email" autocomplete="email" maxlength="254" required><small class="err" data-err="email"></small></label>
+                <label class="field"><span>WhatsApp *</span><input name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="987 654 321" maxlength="20" required><small class="err" data-err="whatsapp"></small></label>
+                <label class="field"><span>¿Tienes dominio propio? *</span><select name="hasDomain" id="f-domain" required></select><small class="err" data-err="hasDomain"></small></label>
+                <label class="field"><span>Presupuesto aproximado</span><select name="budget" id="f-budget"></select><small class="err" data-err="budget"></small></label>
+                <label class="field"><span>¿Para cuándo lo necesitas?</span><select name="desiredDeadline" id="f-desired"></select><small class="err" data-err="desiredDeadline"></small></label>
+                <label class="field field-wide"><span>Cuéntanos sobre tu proyecto *</span><textarea name="description" rows="4" maxlength="2000" placeholder="¿A qué se dedica tu negocio? ¿Qué quieres lograr con la web? ¿Tienes alguna referencia?" required></textarea><small class="err" data-err="description"></small></label>
+                <label class="hp" aria-hidden="true">Sitio web<input name="website" tabindex="-1" autocomplete="off"></label>
+                <label class="check field-wide"><input type="checkbox" name="consent" required><span>Acepto que CotizaTuWeb me contacte por correo o WhatsApp sobre esta cotización. Lee nuestra <a href="/privacidad" target="_blank">política de privacidad</a>. *</span></label>
+                <small class="err field-wide" data-err="consent"></small>
+              </div>
+
+              <div class="finish">
+                <h3>¿Cómo quieres recibir tu cotización?</h3>
+                <div class="finish-actions">
+                  <button type="button" class="btn btn-primary" data-action="pdf"><span data-icon="download"></span>Descargar PDF</button>
+                  <button type="button" class="btn btn-wa" data-action="whatsapp" hidden><span data-icon="whatsapp"></span>Enviar por WhatsApp</button>
+                  <button type="button" class="btn btn-ghost" data-action="propuesta"><span data-icon="send"></span>Solicitar propuesta personalizada</button>
+                </div>
+                <div class="status" id="status" role="status" aria-live="polite"></div>
+              </div>
+            </fieldset>
+
+            <div class="step-nav">
+              <button type="button" class="btn btn-ghost" id="prev">Anterior</button>
+              <button type="button" class="btn btn-primary" id="next">Siguiente</button>
+            </div>
+          </form>
+        </div>
+
+        <aside class="summary" id="summary" aria-label="Resumen de tu cotización">
+          <div class="summary-card">
+            <div class="summary-head">
+              <h3>Tu cotización</h3>
+              <button type="button" class="summary-close" id="summary-close" aria-label="Cerrar resumen"></button>
+            </div>
+            <div id="summary-body"><p class="muted">Elige un tipo de proyecto para empezar.</p></div>
+            <div class="discount" id="discount-box">
+              <label for="discount-code">¿Tienes un código de descuento?</label>
+              <div class="discount-row">
+                <input id="discount-code" maxlength="40" autocomplete="off">
+                <button type="button" class="btn btn-ghost btn-sm" id="discount-apply">Aplicar</button>
+              </div>
+              <small id="discount-msg" aria-live="polite"></small>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="aside-costs" id="costos-aparte">
+      <div class="wrap">
+        <h2>Costos que van aparte del desarrollo</h2>
+        <p class="section-lead">Algunos servicios los cobra un proveedor externo o se pagan de forma recurrente. No están dentro del precio del cotizador, salvo que se indique como incluido.</p>
+        <div class="costs" id="costs"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="mbar" id="mbar">
+    <div><small>Total estimado</small><strong id="mbar-total">S/ 0.00</strong></div>
+    <button type="button" class="btn btn-primary btn-sm" id="mbar-open" aria-controls="summary" aria-expanded="false">Ver detalle</button>
+  </div>
+
+  <footer class="footer">
+    <div class="wrap footer-in">
+      <div>
+        <a class="brand" href="/"><img src="/img/favicon.svg" alt="" width="28" height="28"><span class="brand-name">Cotiza<span>TuWeb</span></span></a>
+        <p class="muted" id="footer-company">Un servicio de Codigo RM Desarrolladores.</p>
+      </div>
+      <div class="footer-links">
+        <a href="/privacidad">Política de privacidad</a>
+        <a id="footer-email" hidden></a>
+        <a data-wa hidden target="_blank" rel="noopener">WhatsApp</a>
+      </div>
+      <p class="muted small" id="rates-note"></p>
+    </div>
+  </footer>
+</body>
+</html>
