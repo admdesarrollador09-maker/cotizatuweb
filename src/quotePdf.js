@@ -22,7 +22,9 @@ function drawLogo(doc, x, y, s = 34) {
   doc.polyline([[x + 18.5 * k, y + 9 * k], [x + 15.5 * k, y + 25 * k]], { color: '#FFFFFF', width: 2.2 * k });
 }
 
-export function renderQuotePdf({ quote, lines, client, settings }) {
+export function renderQuotePdf({ quote, settings }) {
+  const lines = quote.lines;
+  const client = quote.client;
   const doc = new PdfDoc();
   const PW = doc.width;
   const CW = PW - M * 2;
@@ -55,7 +57,7 @@ export function renderQuotePdf({ quote, lines, client, settings }) {
 
   // Cliente y proyecto
   const colW = (CW - 14) / 2;
-  const chars = JSON.parse(quote.characteristics_json || '[]');
+  const chars = quote.characteristics || [];
   const clientRows = [client.name, client.company, client.email, `WhatsApp: ${client.whatsapp}`].filter(Boolean);
   const projRows = chars.map((c) => `${c.label}: ${c.value}`);
   const boxH = Math.max(clientRows.length, projRows.length + 1) * 13 + 34;
@@ -130,7 +132,7 @@ export function renderQuotePdf({ quote, lines, client, settings }) {
     });
   };
 
-  const included = JSON.parse(quote.included_json || '[]');
+  const included = quote.included || [];
   if (included.length) {
     block('Incluido en el paquete sin costo adicional', C.blue);
     para(included.map((f) => f.name).join(' · '));
@@ -143,7 +145,7 @@ export function renderQuotePdf({ quote, lines, client, settings }) {
     y += 10;
   }
 
-  const recurring = JSON.parse(quote.recurring_json || '[]');
+  const recurring = quote.recurring || [];
   if (recurring.length) {
     ensure(recurring.length * 14 + 50); // mantener la tabla completa en una sola página
     block('Servicios no incluidos en el precio de desarrollo', C.blue);

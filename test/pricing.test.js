@@ -1,15 +1,10 @@
 // Pruebas del motor de cálculo con la configuración inicial de la base de datos.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import os from 'node:os';
-import path from 'node:path';
-import fs from 'node:fs';
-import { openDb, buildConfig } from '../src/db.js';
+import { seedCatalog, buildConfig } from '../src/catalog.js';
 import { computeQuote, formatPEN } from '../public/js/pricing.js';
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctw-'));
-const db = openDb(path.join(dir, 'test.db'));
-const cfg = buildConfig(db);
+const cfg = buildConfig(seedCatalog());
 const opt = (grp, label) => cfg.options[grp].find((o) => o.label === label).id;
 const feat = (name) => cfg.features.find((f) => f.name === name).id;
 const sum = (r) => r.lines.reduce((s, l) => s + l.amount, 0) + r.surchargeTotal - r.discountTotal + (r.taxMode === 'added' ? r.tax : 0);

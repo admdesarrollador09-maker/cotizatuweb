@@ -185,8 +185,8 @@ async function viewQuotes() {
 async function viewQuote(id) {
   const d = await api(`/api/admin/quotes/${id}`);
   const { quote: q, client: c, lines, history } = d;
-  const chars = JSON.parse(q.characteristics_json || '[]');
-  const included = JSON.parse(q.included_json || '[]');
+  const chars = q.characteristics || [];
+  const included = q.included || [];
   const tot = [['Subtotal de desarrollo', q.subtotal]];
   for (const l of lines.filter((x) => x.kind === 'surcharge' || x.kind === 'discount')) tot.push([l.concept, l.amount]);
   if (q.tax_mode === 'added') tot.push([`${q.tax_label} (${q.tax_rate} %)`, q.tax]);
@@ -210,7 +210,7 @@ async function viewQuote(id) {
             <dt>Dominio propio</dt><dd>${esc(labelOf(DOMAIN, q.has_domain) || '—')}</dd>
             <dt>Presupuesto</dt><dd>${esc(labelOf(BUDGETS, q.budget))}</dd>
             <dt>Plazo deseado</dt><dd>${esc(labelOf(DESIRED, q.desired_deadline))}</dd>
-            <dt>Canal</dt><dd>${esc(q.channels.split(',').map((x) => CHANNELS[x]).join(', '))}</dd>
+            <dt>Canal</dt><dd>${esc(q.channels.map((x) => CHANNELS[x]).join(', '))}</dd>
             <dt>Consentimiento</dt><dd>${esc(limaDT(q.consent_at))}</dd>
           </dl>
           <h3>Descripción del proyecto</h3><p class="pre">${esc(q.description)}</p>
@@ -526,6 +526,10 @@ function viewSettings() {
         <label class="field"><span>Nueva contraseña</span><input type="password" name="next" autocomplete="new-password"><small class="help">Mínimo 10 caracteres, con letras y números.</small></label>
         <div class="field-wide"><button class="btn btn-ghost">Cambiar contraseña</button></div>
       </form>
+    </section>
+    <section class="card"><h2>Copia de seguridad</h2>
+      <p class="muted small">Descarga en un archivo todas las tarifas, la configuración y las cotizaciones. Guárdalo en un lugar seguro de vez en cuando.</p>
+      <a class="btn btn-ghost btn-sm" href="/api/admin/export">${icon('download')}Descargar respaldo</a>
     </section>
     <section class="card"><h2>Historial de cambios de tarifas</h2>
       ${changeLog.length ? `<ol class="history">${changeLog.map((h) => `<li><span class="h-at">${esc(limaDT(h.at))} · ${esc(h.actor)}</span>${esc(h.summary)}</li>`).join('')}</ol>` : '<p class="muted">Sin cambios todavía.</p>'}

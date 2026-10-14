@@ -29,8 +29,8 @@ async function req(p, { method = 'GET', body, admin = false, headers = {} } = {}
 
 before(async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctw-api-'));
-  proc = spawn(process.execPath, ['--disable-warning=ExperimentalWarning', 'server.js'], {
-    cwd: ROOT, env: { ...process.env, PORT: String(PORT), DB_PATH: path.join(dir, 'db.sqlite'), ADMIN_USER: 'admin', ADMIN_PASSWORD: 'Prueba12345' }, stdio: 'pipe',
+  proc = spawn(process.execPath, ['server.js'], {
+    cwd: ROOT, env: { ...process.env, PORT: String(PORT), DATA_DIR: dir, ADMIN_USER: 'admin', ADMIN_PASSWORD: 'Prueba12345' }, stdio: 'pipe',
   });
   for (let i = 0; i < 50; i++) {
     try { await fetch(URL_ + '/api/config'); return; } catch { await new Promise((r) => setTimeout(r, 100)); }
@@ -149,5 +149,18 @@ test('cabeceras de seguridad y rutas protegidas', async () => {
   assert.match(r.headers.get('content-security-policy'), /script-src 'self'/);
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
   assert.equal((await req('/../server.js')).status, 404);
-  assert.equal((await req('/%2e%2e/data/cotizatuweb.db')).status, 404);
+  assert.equal((await req('/%2e%2e/data/catalog.json')).status, 404);
+});
+
+test('cotizaciones simultáneas reciben números distintos', async () => {
+  const mk = (i) => req('/api/quotes', { method: 'POST', body: { channel: 'pdf', consent: true, client: { ...client, email: `par${i}@x.pe` }, selection: { serviceId: 1, pages: 1 } } });
+  const rs = await Promise.all([0, 1, 2, 3, 4, 5].map(mk));
+  const nums = rs.map((r) => r.data.number);
+  assert.equal(new Set(nums).size, nums.length);
+});
+
+test('respaldo completo descargable', async () => {
+  const r = await req('/api/admin/export', { admin: true });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-disposition'), /attachment/);
 });

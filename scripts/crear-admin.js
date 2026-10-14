@@ -1,13 +1,15 @@
-// Crea un administrador o cambia la contraseña de uno existente.
+// Crea un administrador o cambia su contraseña EN TU COMPUTADORA (datos en la carpeta data/).
+// En Netlify el primer administrador se crea con las variables ADMIN_USER y ADMIN_PASSWORD.
 // Uso:  npm run crear-admin
 import readline from 'node:readline';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDb } from '../src/db.js';
+import { fileStore } from '../src/store.js';
+import { getAdmins, saveAdmin, destroyUserSessions } from '../src/repo.js';
 import { hashPassword, validatePasswordStrength } from '../src/auth.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
-const db = openDb(process.env.DB_PATH || path.join(ROOT, 'data', 'cotizatuweb.db'));
+const store = fileStore(process.env.DATA_DIR || path.join(ROOT, 'data'));
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
 const ask = (q, hidden = false) => new Promise((resolve) => {
@@ -26,12 +28,7 @@ const pw2 = await ask('Repite la contraseña: ', true);
 if (pw !== pw2) { console.error('Las contraseñas no coinciden.'); process.exit(1); }
 rl.close();
 
-const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
-if (existing) {
-  db.prepare('UPDATE admins SET pass_hash = ? WHERE id = ?').run(hashPassword(pw), existing.id);
-  db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(existing.id);
-  console.log(`Contraseña de "${username}" actualizada.`);
-} else {
-  db.prepare('INSERT INTO admins(username, pass_hash) VALUES (?,?)').run(username, hashPassword(pw));
-  console.log(`Administrador "${username}" creado. Ingresa en /admin/`);
-}
+const existed = !!(await getAdmins(store)).users[username];
+await saveAdmin(store, username, hashPassword(pw));
+await destroyUserSessions(store, username);
+console.log(existed ? `Contraseña de "${username}" actualizada.` : `Administrador "${username}" creado. Ingresa en /admin/`);

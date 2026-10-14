@@ -2,26 +2,73 @@
 
 Cotizador web de **Codigo RM Desarrolladores**. Tus clientes eligen el tipo de proyecto, configuran características y funcionalidades, ven el precio en soles al instante y reciben su cotización en PDF, por WhatsApp o como solicitud de propuesta. Tú administras precios y cotizaciones desde un panel privado.
 
-## Requisitos
+## Publicar en Netlify
 
-- **Node.js 22.13 o superior** (incluye la base de datos SQLite; no hay que instalar paquetes).
-- Nada más: el proyecto no tiene dependencias externas, por eso no lleva `node_modules`.
+El proyecto está listo para Netlify:
 
-## Poner en marcha (en tu computadora)
+- La página y el panel se publican desde la carpeta `public/`.
+- La API (cálculo, cotizaciones, PDF y panel) es una **Netlify Function** en `netlify/functions/api.mjs`, que responde en `/api/*`.
+- Los datos (tarifas, configuración y cotizaciones) se guardan en **Netlify Blobs**, el almacenamiento de Netlify. No hay que crear ni conectar ninguna base de datos.
+- `netlify.toml` ya define todo: carpeta publicada, función, cabeceras de seguridad y la versión de Node.
+
+> No uses “arrastrar y soltar” (Netlify Drop): ese método solo publica archivos estáticos, así que el cotizador no podría guardar cotizaciones ni el panel funcionaría. Usa GitHub o la CLI de Netlify.
+
+### Opción A: desde GitHub (recomendada)
+
+Cada vez que subas un cambio a GitHub, Netlify publica la nueva versión sola.
+
+1. **Sube el proyecto a GitHub.** Crea un repositorio privado (por ejemplo `cotizatuweb`) y sube el contenido de la carpeta `cotizatuweb` (con GitHub Desktop o con *Add file → Upload files*). La carpeta `data/` no debe subirse; ya está en `.gitignore`.
+2. **Crea el proyecto en Netlify.** En app.netlify.com: *Add new project → Import an existing project → GitHub* y elige el repositorio. Netlify toma la configuración de `netlify.toml`; no cambies los campos de compilación.
+3. **Define tu usuario administrador.** En el proyecto: *Project configuration → Environment variables → Add a variable*:
+   - `ADMIN_USER` = el usuario que quieras (por ejemplo `marlon`).
+   - `ADMIN_PASSWORD` = una contraseña de al menos 10 caracteres con letras y números. Marca la opción de valor secreto.
+4. **Publica.** Pulsa *Deploy* (o *Trigger deploy → Deploy site* si ya se había publicado antes de crear las variables). La compilación ejecuta las pruebas automáticas; si alguna falla, Netlify no publica la versión rota.
+5. **Prueba.** Abre la dirección que te da Netlify (algo como `https://cotizatuweb.netlify.app`), haz una cotización y descarga el PDF. Luego entra a `https://…netlify.app/admin/` con el usuario y la contraseña del paso 3.
+6. **Cambia la contraseña** desde el panel (*Configuración → Cambiar contraseña*). Desde ese momento vale la nueva; puedes borrar la variable `ADMIN_PASSWORD` de Netlify.
+7. **Dominio propio (opcional).** *Domain management → Add a domain* y sigue las instrucciones para apuntar tu dominio. Netlify activa el HTTPS automáticamente.
+
+### Opción B: con la CLI de Netlify
+
+Requiere Node.js 22 en tu computadora.
+
+```bash
+npm install -g netlify-cli
+cd cotizatuweb
+netlify login                      # abre el navegador para autorizar
+netlify init                       # crea el proyecto en tu cuenta
+netlify env:set ADMIN_USER marlon
+netlify env:set ADMIN_PASSWORD "TuClaveSegura2026" --secret
+netlify deploy --build --prod      # publica
+```
+
+Para publicar cambios después: `netlify deploy --build --prod`.
+
+### Datos iniciales
+
+La primera vez que alguien abre la web, el sistema crea el catálogo con los precios oficiales y la configuración inicial. El WhatsApp comercial (**956 354 120**, guardado como `51956354120`) y el correo **admdesarrollador09@gmail.com** ya vienen configurados; puedes cambiarlos en *Configuración*.
+
+Los datos viven en Netlify Blobs y **se conservan entre publicaciones**: subir una nueva versión del código no borra tarifas ni cotizaciones.
+
+### Copias de seguridad
+
+Panel → *Configuración → Descargar respaldo*. Descarga un archivo con todas las tarifas, la configuración y las cotizaciones. Hazlo de vez en cuando y guárdalo en un lugar seguro.
+
+### Consumo
+
+Las funciones y Blobs consumen parte de los recursos de tu plan de Netlify. Para una web de cotizaciones el consumo suele ser bajo, pero revisa *Usage* en tu cuenta durante las primeras semanas.
+
+## Probar en tu computadora (opcional)
+
+Requiere **Node.js 22 o superior**.
 
 ```bash
 cd cotizatuweb
-cp .env.example .env        # edita los valores si quieres
-npm run crear-admin         # crea tu usuario administrador
-npm start                   # abre http://localhost:3000
+npm install            # instala @netlify/blobs (solo se usa en Netlify)
+npm run crear-admin    # crea tu usuario administrador local
+npm start              # abre http://localhost:3000
 ```
 
-- Sitio público: `http://localhost:3000`
-- Panel administrativo: `http://localhost:3000/admin/`
-
-La base de datos se crea sola en `data/cotizatuweb.db` la primera vez, con los precios oficiales iniciales.
-
-El WhatsApp comercial (**956 354 120**, guardado como `51956354120`) y el correo **admdesarrollador09@gmail.com** ya vienen configurados. Puedes cambiarlos en el panel → *Configuración*. Si borras el número, los botones de WhatsApp se ocultan.
+En tu computadora los datos se guardan en archivos dentro de `data/`, separados de los datos de Netlify.
 
 ## Cómo se calcula el precio
 
@@ -82,39 +129,9 @@ Los precios base son los oficiales. El resto son valores de partida que puedes c
 - IGV desactivado (los precios se muestran sin impuesto). Actívalo en *Precios y reglas* si corresponde.
 - El código de descuento `BIENVENIDA` (10 %) viene creado pero **inactivo**.
 
-## Publicar en internet
-
-Necesitas un servicio que ejecute **Node.js 22.13+** y guarde archivos de forma **persistente** (SQLite es un archivo).
-
-| Opción | Notas |
-|---|---|
-| **VPS** (DigitalOcean, Hetzner, Contabo, Hostinger VPS…) | Control total. Usa Nginx como proxy con HTTPS (Let's Encrypt) y `pm2` o `systemd` para mantener el proceso encendido. |
-| **Railway / Render** | Despliegue desde GitHub. **Agrega un volumen o disco persistente** y apunta `DB_PATH` a él; sin eso, la base de datos se borra en cada despliegue. |
-| **Hosting compartido con “Node.js App”** en cPanel | Funciona si el proveedor ofrece Node.js 22.13 o superior. Verifica la versión antes de contratar. |
-
-Variables de entorno en producción (ver `.env.example`):
-
-```
-PORT=3000
-DB_PATH=/ruta/persistente/cotizatuweb.db
-PUBLIC_URL=https://www.tudominio.com
-COOKIE_SECURE=1      # solo con HTTPS
-TRUST_PROXY=1        # si hay Nginx, Render, Railway u otro proxy delante
-```
-
-Para crear el administrador en el servidor: `npm run crear-admin`, o define `ADMIN_USER` y `ADMIN_PASSWORD` antes del primer arranque (luego bórralas).
-
-### Copias de seguridad
-
-```bash
-npm run respaldo
-```
-
-Crea una copia en `data/respaldos/` aunque el servidor esté encendido. Programa este comando a diario (cron) y descarga las copias a otro lugar.
-
 ## Seguridad incluida
 
-- Contraseñas cifradas con scrypt; sesiones con cookie `HttpOnly` y `SameSite=Strict`, vencen a las 8 horas.
+- Contraseñas cifradas con scrypt; sesiones con cookie `HttpOnly`, `Secure` y `SameSite=Strict`, vencen a las 8 horas.
 - Bloqueo temporal tras 5 intentos fallidos de ingreso.
 - Protección CSRF en el panel y cabeceras de seguridad (CSP, anti-iframe, etc.).
 - Límite de solicitudes por IP en el cotizador y campo trampa contra spam.
@@ -127,22 +144,27 @@ Crea una copia en `data/respaldos/` aunque el servidor esté encendido. Programa
 npm test
 ```
 
-Comprueba los precios oficiales, el cálculo de páginas adicionales, que no haya cobros duplicados, que el total coincida con la suma de conceptos en más de mil combinaciones, las validaciones, el PDF, el mensaje de WhatsApp, la seguridad del panel y que cambiar tarifas no altere cotizaciones anteriores.
+Netlify también las ejecuta antes de cada publicación. Comprueban los precios oficiales, el cálculo de páginas adicionales, que no haya cobros duplicados, que el total coincida con la suma de conceptos en más de mil combinaciones, las validaciones, el PDF, el mensaje de WhatsApp, la seguridad del panel y que cambiar tarifas no altere cotizaciones anteriores.
 
 ## Estructura
 
 ```
-server.js              Servidor y rutas de la API
-src/db.js              Base de datos, estructura y valores iniciales
-src/quotes.js          Creación y ajuste de cotizaciones
-src/quotePdf.js        Diseño del PDF
-src/pdfwriter.js       Generador de PDF (sin dependencias)
-src/auth.js            Contraseñas, sesiones y límites de intentos
-public/index.html      Página pública y cotizador
-public/js/pricing.js   Motor de cálculo (único, compartido por navegador y servidor)
-public/js/app.js       Lógica del cotizador
-public/admin/          Panel administrativo
-public/privacidad.html Política de privacidad
-scripts/               crear-admin y respaldo
-test/                  Pruebas automáticas
+netlify.toml                 Configuración de Netlify
+netlify/functions/api.mjs    Netlify Function que atiende /api/*
+src/app.js                   Rutas de la API (cotizador y panel)
+src/catalog.js               Precios y configuración iniciales
+src/repo.js                  Acceso a los datos (cotizaciones, sesiones, historial)
+src/store.js                 Almacenamiento: Netlify Blobs o archivos locales
+src/quotes.js                Creación y ajuste de cotizaciones
+src/quotePdf.js              Diseño del PDF
+src/pdfwriter.js             Generador de PDF (sin dependencias)
+src/auth.js                  Contraseñas cifradas
+public/index.html            Página pública y cotizador
+public/js/pricing.js         Motor de cálculo (único, compartido por navegador y servidor)
+public/js/app.js             Lógica del cotizador
+public/admin/                Panel administrativo
+public/privacidad.html       Política de privacidad
+server.js                    Servidor para probar en tu computadora
+scripts/crear-admin.js       Crear administrador local
+test/                        Pruebas automáticas
 ```
