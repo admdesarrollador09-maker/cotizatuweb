@@ -2,13 +2,15 @@
 // La usan la Netlify Function (netlify/functions/api.mjs) y el servidor local (server.js).
 import { HttpError, json, readJson, parseCookies, cookie, SECURITY_HEADERS } from './http.js';
 import { hashPassword, verifyPassword, validatePasswordStrength } from './auth.js';
-import { buildConfig, recurringItems, nextId, sortCatalog } from './catalog.js';
+import { buildConfig, publicConfig, recurringItems, nextId, sortCatalog, pendingPricing } from './catalog.js';
+import { computeQuote, cleanSelection, clientView } from './pricing.js';
 import {
   getCatalog, updateCatalog, getChangelog, getQuote, getQuoteByToken, listQuotes, updateQuote,
   getAdmins, saveAdmin, createSession, getSession, destroySession, destroyUserSessions,
   rateCheck, rateHit, rateReset, nowUtc,
 } from './repo.js';
-import { createQuote, whatsappText, adjustQuote, findCodeDiscount } from './quotes.js';
+import { createQuote, whatsappText, adjustQuote, findCodeDiscount, limaToday } from './quotes.js';
+import { renderQuoteXlsx } from './quoteXlsx.js';
 import { renderQuotePdf } from './quotePdf.js';
 import { STATUSES } from '../public/js/formOptions.js';
 
@@ -58,12 +60,21 @@ const findOr404 = (list, id, what) => {
   return x;
 };
 
+// Importe opcional: vacío = pendiente de configuración (null).
+function optMoney(v, field) {
+  if (v === null || v === undefined || v === '') return null;
+  return V.int(v, field, { min: 0 });
+}
+
 // ---------- Normalización de cada entidad ----------
 function cleanService(b) {
   return {
     name: V.text(b.name, 'Nombre', { min: 3, max: 80 }),
     description: V.text(b.description, 'Descripción', { max: 300 }),
     icon: V.oneOf(b.icon, 'Icono', ICONS),
+    kind: V.oneOf(b.kind || 'web', 'Tipo de preguntas', ['web', 'store', 'app']),
+    benefits: (Array.isArray(b.benefits) ? b.benefits : String(b.benefits || '').split('\n')).map((x) => String(x).trim()).filter(Boolean).slice(0, 6)
+      .map((x) => V.text(x, 'Beneficio', { max: 120 })),
     base_price: V.int(b.base_price, 'Precio base', { min: 0 }),
     included_pages: V.int(b.included_pages, 'Páginas incluidas', { min: 1, max: 200 }),
     base_days: V.int(b.base_days, 'Días base', { min: 1, max: 365 }),
@@ -80,8 +91,9 @@ function cleanFeature(b) {
   return {
     name: V.text(b.name, 'Nombre', { min: 3, max: 80 }),
     description: V.text(b.description, 'Descripción', { max: 300 }),
-    price: V.int(b.price, 'Precio', { min: 0 }),
+    price: optMoney(b.price, 'Precio'),
     days: V.int(b.days ?? 0, 'Días', { min: 0, max: 365 }),
+    category: V.oneOf(b.category || 'general', 'Categoría', ['general', 'tienda', 'app']),
     active: V.bool(b.active),
     sort: V.int(b.sort ?? 0, 'Orden', { min: 0, max: 999 }),
     compat,
@@ -124,8 +136,56 @@ function cleanRecurring(b) {
   return {
     name: V.text(b.name, 'Nombre', { min: 2, max: 80 }), description: V.text(b.description, 'Descripción', { max: 300 }),
     status: V.oneOf(b.status, 'Condición', ['incluido', 'opcional', 'separado']), reference: V.text(b.reference, 'Referencia', { max: 160 }),
+    period: V.oneOf(b.period || 'mensual', 'Periodicidad', ['mensual', 'anual', 'unico']),
+    price: optMoney(b.price, 'Precio'),
+    selectable: V.bool(b.selectable),
     active: V.bool(b.active), sort: V.int(b.sort ?? 0, 'Orden', { min: 0, max: 999 }),
   };
+}
+
+function cleanQuestion(b, cat) {
+  const type = V.oneOf(b.type, 'Tipo', ['single', 'text', 'feature']);
+  const services = (Array.isArray(b.services) ? b.services : []).map(Number).filter((id) => cat.services.some((x) => x.id === id));
+  const v = {
+    key: String(b.key || '').trim(),
+    step: V.oneOf(Number(b.step), 'Paso', [2, 3]),
+    services, type,
+    label: V.text(b.label, 'Pregunta', { min: 3, max: 160 }),
+    short: V.text(b.short || b.label, 'Nombre corto', { min: 2, max: 60 }),
+    help: V.text(b.help, 'Ayuda', { max: 300 }),
+    required: V.bool(b.required), active: V.bool(b.active),
+    sort: V.int(b.sort ?? 0, 'Orden', { min: 0, max: 999 }),
+    feature_id: null, options: [],
+  };
+  if (!/^[a-z_]{2,40}$/.test(v.key)) throw new HttpError(422, 'Clave: usa de 2 a 40 letras minúsculas o guiones bajos.');
+  if (type === 'feature') {
+    const fid = Number(b.feature_id);
+    if (!cat.features.some((f) => f.id === fid)) throw new HttpError(422, 'Elige la funcionalidad vinculada.');
+    v.feature_id = fid;
+  }
+  if (type === 'single') {
+    const opts = Array.isArray(b.options) ? b.options.slice(0, 20) : [];
+    if (opts.length < 2) throw new HttpError(422, 'Agrega al menos dos opciones.');
+    let next = opts.reduce((m, x) => Math.max(m, Number(x.id) || 0), 0) + 1;
+    v.options = opts.map((x) => ({
+      id: Number.isInteger(Number(x.id)) && Number(x.id) > 0 ? Number(x.id) : next++,
+      label: V.text(x.label, 'Opción', { min: 1, max: 100 }),
+      price_type: V.oneOf(x.price_type || 'fixed', 'Tipo de precio', ['fixed', 'per_page', 'percent_base']),
+      amount: x.amount === null || x.amount === undefined || x.amount === '' ? null : V.num(x.amount, 'Importe', { min: 0 }),
+      days: V.int(x.days ?? 0, 'Días', { min: 0, max: 365 }),
+    }));
+  }
+  return v;
+}
+
+function cleanPageRanges(v) {
+  if (!Array.isArray(v) || !v.length || v.length > 12) throw new HttpError(422, 'Rangos de páginas: agrega entre 1 y 12.');
+  return v.map((r, i) => ({
+    id: Number.isInteger(Number(r.id)) && Number(r.id) > 0 ? Number(r.id) : 100 + i,
+    label: V.text(r.label, 'Rango', { min: 2, max: 60 }),
+    pages: V.int(r.pages, 'Páginas para el cálculo', { min: 1, max: 500 }),
+    extra_pending: V.bool(r.extra_pending),
+  }));
 }
 
 const SETTING_RULES = {
@@ -156,8 +216,9 @@ const SETTING_RULES = {
   rates_valid_from: (v) => V.date(v, 'Tarifas desde') || '',
   rates_valid_to: (v) => V.date(v, 'Tarifas hasta') || '',
   conditions: (v) => V.text(v, 'Condiciones comerciales', { max: 4000 }),
+  page_ranges: cleanPageRanges,
 };
-const PRICING_KEYS = ['extra_page_price', 'extra_page_days', 'page_options', 'surcharge_base', 'tax_mode', 'tax_rate', 'tax_label', 'conditions'];
+const PRICING_KEYS = ['page_ranges', 'extra_page_price', 'extra_page_days', 'page_options', 'surcharge_base', 'tax_mode', 'tax_rate', 'tax_label', 'conditions'];
 
 function publicSettings(s) {
   return {
@@ -196,10 +257,46 @@ export function createApp({ getStore, env = {} }) {
     });
   }
 
+  function xlsxResponse(quote, catalog) {
+    const buf = renderQuoteXlsx({ quote, settings: catalog.settings });
+    return new Response(buf, {
+      status: 200,
+      headers: {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Length': String(buf.length),
+        'Content-Disposition': `attachment; filename="Cotizacion-${quote.number}.xlsx"`,
+        'Cache-Control': 'private, no-store',
+      },
+    });
+  }
+
+  // Límite en memoria para el cálculo del total (consultas frecuentes y baratas).
+  const estimateHits = new Map();
+  function estimateLimiter(ip) {
+    const now = Date.now();
+    const list = (estimateHits.get(ip) || []).filter((t) => now - t < 600e3);
+    if (list.length >= 300) return false;
+    list.push(now);
+    estimateHits.set(ip, list);
+    if (estimateHits.size > 5000) estimateHits.clear();
+    return true;
+  }
+
   // ---------- Rutas públicas ----------
   route('GET', /^\/api\/config$/, async ({ store }) => {
     const cat = await getCatalog(store);
-    return { config: buildConfig(cat), business: publicSettings(cat.settings), recurring: recurringItems(cat) };
+    return { config: publicConfig(cat), business: publicSettings(cat.settings), recurring: recurringItems(cat) };
+  });
+
+  // Total estimado (el navegador nunca recibe las tarifas, solo el resultado).
+  route('POST', /^\/api\/estimate$/, async ({ store, request, ip }) => {
+    if (!estimateLimiter(ip)) throw new HttpError(429, 'Demasiadas consultas seguidas. Espera un momento.');
+    const body = await readJson(request, 16 * 1024);
+    const cat = await getCatalog(store);
+    const codeDiscount = body.discountCode ? findCodeDiscount(cat, body.discountCode) : null;
+    const r = computeQuote(buildConfig(cat), cleanSelection(body.selection), { today: limaToday(), codeDiscount });
+    return clientView(r);
   });
 
   route('POST', /^\/api\/discounts\/check$/, async ({ store, request, ip }) => {
@@ -208,7 +305,7 @@ export function createApp({ getStore, env = {} }) {
     const { code } = await readJson(request, 2048);
     const d = findCodeDiscount(await getCatalog(store), code);
     if (!d) throw new HttpError(404, 'El código no es válido o ha vencido.');
-    return { discount: d };
+    return { discount: { name: d.name } };
   });
 
   route('POST', /^\/api\/quotes$/, async ({ store, request, ip, url }) => {
@@ -221,7 +318,8 @@ export function createApp({ getStore, env = {} }) {
     const origin = (env.PUBLIC_URL || url.origin).replace(/\/$/, '');
     return {
       number: quote.number, token: quote.token, total: quote.total, days: quote.days, validUntil: quote.valid_until,
-      pdfUrl: pdfPath, whatsappText: whatsappText(quote, origin + pdfPath), reused,
+      createdAt: quote.created_at, pdfUrl: pdfPath, xlsxUrl: `/api/quotes/${quote.token}/xlsx`,
+      whatsappText: whatsappText(quote, origin + pdfPath), reused,
     };
   });
 
@@ -229,6 +327,12 @@ export function createApp({ getStore, env = {} }) {
     const q = await getQuoteByToken(store, params[0]);
     if (!q) throw new HttpError(404, 'Cotización no encontrada.');
     return pdfResponse(q, await getCatalog(store), url.searchParams.has('download'));
+  });
+
+  route('GET', /^\/api\/quotes\/([A-Za-z0-9_-]{20,64})\/xlsx$/, async ({ store, params }) => {
+    const q = await getQuoteByToken(store, params[0]);
+    if (!q) throw new HttpError(404, 'Cotización no encontrada.');
+    return xlsxResponse(q, await getCatalog(store));
   });
 
   // ---------- Autenticación ----------
@@ -274,7 +378,7 @@ export function createApp({ getStore, env = {} }) {
   // ---------- Catálogo y tarifas ----------
   route('GET', /^\/api\/admin\/catalog$/, async ({ store }) => {
     const cat = sortCatalog(await getCatalog(store));
-    return { ...cat, changeLog: (await getChangelog(store)).slice(0, 40) };
+    return { ...cat, pending: pendingPricing(cat), changeLog: (await getChangelog(store)).slice(0, 40) };
   }, { admin: true });
 
   // Crea o actualiza un elemento de una lista del catálogo.
@@ -316,6 +420,27 @@ export function createApp({ getStore, env = {} }) {
     },
   });
   crud('recurring', cleanRecurring, 'Costo aparte', (v) => v.name, { bump: false });
+
+  // Preguntas del cotizador (pasos 2 y 3).
+  const saveQuestion = async (ctx) => {
+    const b = await readJson(ctx.request);
+    const id = ctx.params[0] ? Number(ctx.params[0]) : null;
+    const { result } = await updateCatalog(ctx.store, (cat) => {
+      const v = cleanQuestion(b, cat);
+      if (cat.questions.some((q) => q.key === v.key && q.id !== id)) throw new HttpError(422, 'Ya existe una pregunta con esa clave.');
+      if (id) {
+        const q = findOr404(cat.questions, id, 'Pregunta');
+        Object.assign(q, v, { show_if: q.show_if || null });
+        return id;
+      }
+      const nid = nextId(cat.questions);
+      cat.questions.push({ id: nid, ...v, show_if: null });
+      return nid;
+    }, { bump: true, actor: ctx.admin.username, summary: `${id ? 'Actualizó' : 'Creó'} la pregunta "${b.short || b.label}".` });
+    return { id: result };
+  };
+  route('POST', /^\/api\/admin\/questions$/, saveQuestion, { admin: true });
+  route('PUT', /^\/api\/admin\/questions\/(\d+)$/, saveQuestion, { admin: true });
 
   route('DELETE', /^\/api\/admin\/discounts\/(\d+)$/, async (ctx) => {
     const id = Number(ctx.params[0]);

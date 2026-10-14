@@ -9,6 +9,7 @@ export const BUDGETS = [
 ];
 
 export const DOMAIN = [
+  ['', 'Prefiero no indicarlo'],
   ['si', 'Sí, ya tengo dominio'],
   ['no', 'No, aún no tengo'],
   ['no_seguro', 'No estoy seguro'],
@@ -34,7 +35,7 @@ export const STATUSES = [
   ['ejecucion', 'Proyecto en ejecución'],
 ];
 
-export const CHANNELS = { pdf: 'Descarga de PDF', whatsapp: 'WhatsApp', propuesta: 'Propuesta personalizada' };
+export const CHANNELS = { web: 'Cotizador web', pdf: 'Descarga de PDF', whatsapp: 'WhatsApp', propuesta: 'Propuesta personalizada' };
 
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[A-Za-z]{2,}$/;
 
@@ -49,18 +50,19 @@ export function validateClient(d) {
   const email = String(d.email || '').trim();
   const phone = normalizePhone(d.whatsapp);
   const desc = String(d.description || '').trim();
-  if (name.length < 3) e.name = 'Escribe tu nombre y apellido.';
+  if (name.length < 3) e.name = 'Escribe tu nombre o razón social.';
   else if (name.length > 100) e.name = 'El nombre es demasiado largo.';
-  if (String(d.company || '').length > 120) e.company = 'El nombre de la empresa es demasiado largo.';
+  const company = String(d.company || '').trim();
+  if (company.length < 2) e.company = 'Escribe el nombre de tu proyecto o empresa.';
+  else if (company.length > 120) e.company = 'El nombre es demasiado largo.';
   if (!email) e.email = 'Escribe tu correo electrónico.';
   else if (email.length > 254 || !EMAIL_RE.test(email)) e.email = 'Revisa el formato del correo (ejemplo: nombre@empresa.com).';
-  if (!phone) e.whatsapp = 'Escribe tu número de WhatsApp.';
+  if (!phone) e.whatsapp = 'Escribe tu número de WhatsApp o teléfono.';
   else if (phone.length < 9 || phone.length > 15) e.whatsapp = 'El número debe tener entre 9 y 15 dígitos.';
-  if (!DOMAIN.some(([k]) => k === d.hasDomain)) e.hasDomain = 'Indica si tienes dominio propio.';
+  if (!DOMAIN.some(([k]) => k === (d.hasDomain || ''))) e.hasDomain = 'Indica si tienes dominio propio.';
   if (!BUDGETS.some(([k]) => k === (d.budget || ''))) e.budget = 'Opción no válida.';
   if (!DESIRED.some(([k]) => k === (d.desiredDeadline || ''))) e.desiredDeadline = 'Opción no válida.';
-  if (desc.length < 10) e.description = 'Cuéntanos brevemente tu proyecto (mínimo 10 caracteres).';
-  else if (desc.length > 2000) e.description = 'La descripción no debe superar los 2000 caracteres.';
+  if (desc.length > 2000) e.description = 'La descripción no debe superar los 2000 caracteres.';
   if (d.consent !== true) e.consent = 'Necesitamos tu autorización para contactarte.';
   return e;
 }

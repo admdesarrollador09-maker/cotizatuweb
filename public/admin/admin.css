@@ -127,3 +127,17 @@ code { background: var(--bg); border: 1px solid var(--line); padding: 1px 6px; b
   .compat { grid-template-columns: 1fr; }
 }
 .tbl-edit td:first-child { min-width: 150px; }
+.pill-p { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
+.card-warn { border-color: #F6D9A8; background: #FFFCF5; }
+.pending-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; font-size: .875rem; max-height: 320px; overflow: auto; }
+.pending-list .pill { margin-right: 6px; }
+.q-row { border-top: 1px solid var(--line); padding: 14px 0; }
+.q-row:first-of-type { border-top: 0; padding-top: 4px; }
+.q-row.off { opacity: .55; }
+.q-row-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.q-row-head small { display: block; color: var(--muted); font-size: .8rem; margin-top: 2px; }
+.tbl-q { margin-top: 8px; font-size: .85rem; }
+.tbl-q td { padding: 5px 10px; border-bottom: 1px solid #F1F3F6; }
+#ranges .row-actions { margin-top: 10px; }
+.tbl-edit input[type=checkbox] { width: 20px; height: 20px; min-height: 0; padding: 0; accent-color: var(--blue); }
+.tbl-edit .check { align-items: center; }

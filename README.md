@@ -70,37 +70,58 @@ npm start              # abre http://localhost:3000
 
 En tu computadora los datos se guardan en archivos dentro de `data/`, separados de los datos de Netlify.
 
-## Cómo se calcula el precio
+## Cómo funciona el cotizador
+
+El cliente avanza en cinco pasos. Las preguntas cambian según el tipo de proyecto:
+
+1. **Proyecto**: los cinco paquetes, con descripción y beneficios, sin precios.
+2. **Alcance**:
+   - Páginas web: rango de páginas, tipo de web, galería, blog, fotos y videos.
+   - Tienda virtual: productos, carga de productos, variantes, inventario y panel.
+   - Aplicación web: objetivo, usuarios, procesos, reportes, integraciones y datos.
+3. **Diseño y contenido**: plantilla o diseño exclusivo, identidad visual, textos, fotografías, idiomas y plazo.
+4. **Funciones**: agrupadas por tipo de proyecto. Las incluidas en el paquete aparecen marcadas y no se cobran. También se eligen aquí los servicios recurrentes (dominio, hosting, mantenimiento, soporte).
+5. **Resumen**: datos del cliente, alcance, funciones, plazo y **un solo total**. Desde aquí se genera la cotización, se descarga en PDF o Excel, se envía por WhatsApp o se vuelve a editar.
+
+**Precios ocultos de verdad:** el navegador nunca recibe tarifas. El servidor calcula el total y solo devuelve ese monto. El PDF, el Excel y el mensaje de WhatsApp tampoco muestran precios por concepto. El desglose interno solo lo ves tú en el panel.
+
+## Cómo se calcula el precio (interno)
 
 ```
-Precio base del proyecto
-+ páginas adicionales (solo las que superan las incluidas en el paquete)
-+ diseño + idiomas + contenido
+Precio base del paquete
++ páginas adicionales (páginas del rango elegido − páginas incluidas) × precio por página
++ respuestas con tarifa (cantidad de productos, edición de fotos, etc.)
++ diseño + textos + idiomas
 + funcionalidades adicionales (las incluidas en el paquete no se cobran)
 = Subtotal de desarrollo
-+ recargo por plazo (porcentaje sobre el subtotal o sobre el precio base, configurable)
++ recargo por plazo urgente
 − descuento (se aplica el mayor; no se acumulan)
-+ IGV (opcional: no se muestra, se suma o ya está incluido)
-= Total estimado
++ IGV (opcional)
+= Total del desarrollo
 ```
 
-Los costos recurrentes (dominio, hosting, licencias, etc.) se muestran aparte y **nunca** se suman al total.
+Los servicios recurrentes se totalizan aparte, por periodo (mensual, anual), y nunca se suman al desarrollo.
 
-El navegador solo envía las opciones elegidas. El servidor vuelve a calcular todo con los precios de la base de datos, así que nadie puede alterar el total desde el navegador.
+### Conceptos "pendientes de configuración"
+
+Las opciones nuevas que todavía no tienen tarifa (por ejemplo, "De 51 a 100 productos", "Billeteras digitales" o "Hosting") **no suman nada al total**. El cliente ve que esos puntos "se confirman en la propuesta final". En el panel, **Precios y reglas → Pendientes de configuración** muestra la lista completa. Cuando les pongas precio, empezarán a sumarse automáticamente en las cotizaciones nuevas.
 
 ## Administrar precios (sin tocar código)
 
 | Quiero cambiar… | Dónde |
 |---|---|
-| Precio base, páginas incluidas, descripción o visibilidad de un servicio | Panel → **Servicios** |
-| Precio de una funcionalidad, o si está incluida / disponible / no disponible en cada servicio | Panel → **Funcionalidades** |
-| Precio por página adicional, opciones de páginas, base del recargo, IGV, vigencia de tarifas | Panel → **Precios y reglas** → Reglas generales |
-| Precios de diseño, idiomas, contenido y plazo (incluido el % de urgencia) | Panel → **Precios y reglas** → Opciones de características |
+| Precio base, páginas incluidas, beneficios o tipo de preguntas de un paquete | Panel → **Servicios** |
+| Preguntas de los pasos 2 y 3, sus opciones y el precio de cada opción | Panel → **Preguntas** |
+| Precio de una funcionalidad y si está incluida, disponible o no disponible en cada paquete | Panel → **Funcionalidades** |
+| Rangos de páginas, precio por página adicional, IGV, recargo por plazo y vigencia de tarifas | Panel → **Precios y reglas** |
+| Precios de diseño, textos, idiomas y plazo de entrega | Panel → **Precios y reglas** → Opciones de características |
 | Descuentos automáticos o con código | Panel → **Precios y reglas** → Descuentos |
-| Dominio, hosting y demás costos aparte | Panel → **Costos aparte** |
-| WhatsApp, correo, vigencia de cotizaciones, condiciones comerciales del PDF | Panel → **Configuración** |
+| Dominio, hosting, mantenimiento, soporte: precio, periodicidad y si el cliente puede elegirlo | Panel → **Costos aparte** |
+| WhatsApp, correo, vigencia de cotizaciones y condiciones comerciales | Panel → **Configuración** |
 
-Cada cambio de tarifas queda registrado en *Configuración → Historial de cambios de tarifas*. **Las cotizaciones ya emitidas conservan sus importes**: cada una guarda una copia de sus conceptos y precios.
+En los precios, **un campo vacío significa "pendiente"** y **0 significa "sin costo"**.
+
+Cada cambio de tarifas queda registrado en *Configuración → Historial de cambios de tarifas*. **Las cotizaciones ya emitidas conservan sus importes.**
 
 ## Administrar cotizaciones
 
@@ -160,8 +181,10 @@ src/quotePdf.js              Diseño del PDF
 src/pdfwriter.js             Generador de PDF (sin dependencias)
 src/auth.js                  Contraseñas cifradas
 public/index.html            Página pública y cotizador
-public/js/pricing.js         Motor de cálculo (único, compartido por navegador y servidor)
-public/js/app.js             Lógica del cotizador
+src/pricing.js               Motor de cálculo (solo en el servidor)
+src/quoteXlsx.js             Exportación a Excel
+public/js/questions.js       Reglas de visibilidad de preguntas (sin precios)
+public/js/app.js             Cotizador de 5 pasos
 public/admin/                Panel administrativo
 public/privacidad.html       Política de privacidad
 server.js                    Servidor para probar en tu computadora

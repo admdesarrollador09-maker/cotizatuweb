@@ -1,4 +1,4 @@
-import { formatPEN } from '/js/pricing.js';
+import { formatPEN, PERIOD_LABEL } from '/js/questions.js';
 import { STATUSES, CHANNELS, BUDGETS, DOMAIN, DESIRED, labelOf } from '/js/formOptions.js';
 import { esc, ICON_NAMES, icon } from '/js/icons.js';
 
@@ -55,6 +55,7 @@ function fieldHtml(f) {
   if (f.type === 'textarea') input = `<textarea id="${id}" name="${f.name}" rows="${f.rows || 3}">${esc(v)}</textarea>`;
   else if (f.type === 'select') input = `<select id="${id}" name="${f.name}">${f.options.map(([k, l]) => `<option value="${esc(k)}" ${String(k) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
   else if (f.type === 'money') input = `<div class="affix"><span>S/</span><input id="${id}" name="${f.name}" inputmode="decimal" value="${esc(soles(v))}"></div>`;
+  else if (f.type === 'money_opt') input = `<div class="affix"><span>S/</span><input id="${id}" name="${f.name}" inputmode="decimal" placeholder="Pendiente" value="${v === null || v === undefined || v === '' ? '' : esc(soles(v))}"></div>`;
   else if (f.type === 'percent') input = `<div class="affix affix-r"><input id="${id}" name="${f.name}" inputmode="decimal" value="${esc(v)}"><span>%</span></div>`;
   else input = `<input id="${id}" name="${f.name}" type="${f.type === 'number' ? 'text' : f.type || 'text'}" ${f.type === 'number' ? 'inputmode="decimal"' : ''} value="${esc(v)}">`;
   return `<label class="field ${f.wide ? 'field-wide' : ''}" for="${id}"><span>${esc(f.label)}</span>${input}${help}</label>`;
@@ -67,6 +68,7 @@ function readFields(fields, form) {
     const el = form.elements[f.name];
     if (f.type === 'checkbox') out[f.name] = el.checked;
     else if (f.type === 'money') out[f.name] = cents(el.value);
+    else if (f.type === 'money_opt') out[f.name] = String(el.value).trim() === '' ? null : cents(el.value);
     else if (f.type === 'number' || f.type === 'percent') out[f.name] = el.value === '' ? '' : Number(String(el.value).replace(',', '.'));
     else out[f.name] = el.value;
   }
@@ -134,7 +136,7 @@ async function show(view) {
     if (view === 'quotes') await viewQuotes();
     else {
       await loadCatalog();
-      ({ services: viewServices, features: viewFeatures, pricing: viewPricing, recurring: viewRecurring, settings: viewSettings })[view]();
+      ({ services: viewServices, questions: viewQuestions, features: viewFeatures, pricing: viewPricing, recurring: viewRecurring, settings: viewSettings })[view]();
     }
   } catch (ex) { $('#view').innerHTML = `<p class="status error">${esc(ex.message)}</p>`; }
 }
@@ -198,6 +200,7 @@ async function viewQuote(id) {
       <div class="actions">
         <a class="btn btn-ghost btn-sm" href="/api/admin/quotes/${q.id}/pdf" target="_blank" rel="noopener">${icon('file')}Ver PDF</a>
         <a class="btn btn-primary btn-sm" href="/api/admin/quotes/${q.id}/pdf?download=1">${icon('download')}Descargar PDF</a>
+        <a class="btn btn-ghost btn-sm" href="/api/quotes/${esc(q.token)}/xlsx">${icon('download')}Excel</a>
       </div></div>
     <div class="qgrid">
       <div class="col">
@@ -213,16 +216,22 @@ async function viewQuote(id) {
             <dt>Canal</dt><dd>${esc(q.channels.map((x) => CHANNELS[x]).join(', '))}</dd>
             <dt>Consentimiento</dt><dd>${esc(limaDT(q.consent_at))}</dd>
           </dl>
-          <h3>Descripción del proyecto</h3><p class="pre">${esc(q.description)}</p>
+          <h3>Alcance</h3><dl class="dl">${chars.map((x) => `<dt>${esc(x.label)}</dt><dd>${esc(x.value)}</dd>`).join('')}</dl>
+          ${q.description ? `<h3>Comentarios del cliente</h3><p class="pre">${esc(q.description)}</p>` : ''}
         </section>
 
-        <section class="card"><div class="card-head"><h2>Detalle del presupuesto</h2><button class="btn btn-ghost btn-sm" id="adjust">Ajustar propuesta</button></div>
-          <p class="muted small">${esc(q.service_name)}. ${chars.map((x) => `${esc(x.label)}: ${esc(x.value)}`).join(' · ')}</p>
+        ${(q.pending || []).length || (q.recurring_selected || []).length ? `<section class="card card-warn"><h2>Por confirmar con el cliente</h2>
+          ${(q.pending || []).length ? `<p class="small">Conceptos sin tarifa (no sumados al total): ${esc(q.pending.join(' · '))}.</p>` : ''}
+          ${(q.recurring_selected || []).length ? `<p class="small">Servicios recurrentes solicitados: ${esc(q.recurring_selected.map((r) => `${r.name} (${PERIOD_LABEL[r.period] || r.period})`).join(', '))}.</p>` : ''}
+          ${(q.recurring_pending || []).length ? `<p class="small">Recurrentes sin precio: ${esc(q.recurring_pending.join(', '))}.</p>` : ''}
+        </section>` : ''}
+        <section class="card"><div class="card-head"><h2>Detalle del presupuesto <span class="pill">Solo para ti</span></h2><button class="btn btn-ghost btn-sm" id="adjust">Ajustar propuesta</button></div>
+          <p class="muted small">${esc(q.service_name)}</p>
           <div class="table-wrap"><table class="tbl tbl-lines"><thead><tr><th>Concepto</th><th class="num">Cant.</th><th class="num">P. unit.</th><th class="num">Importe</th></tr></thead>
           <tbody>${lines.filter((l) => l.kind !== 'surcharge' && l.kind !== 'discount').map((l) => `<tr><td>${esc(l.concept)}<small>${esc(l.detail)}</small></td><td class="num">${l.qty}</td><td class="num">${formatPEN(l.unit_price)}</td><td class="num"><b>${formatPEN(l.amount)}</b></td></tr>`).join('')}</tbody></table></div>
           <ul class="totals">${tot.map(([k, v]) => `<li><span>${esc(k)}</span><b>${formatPEN(v)}</b></li>`).join('')}<li class="grand"><span>Total</span><b>${formatPEN(q.total)}</b></li></ul>
           ${included.length ? `<p class="small muted">Incluido sin costo: ${esc(included.map((f) => f.name).join(', '))}.</p>` : ''}
-          <p class="small muted">Importes guardados con las tarifas vigentes al emitir la cotización (versión de tarifas ${q.pricing_version}). Los cambios de precios posteriores no la modifican.</p>
+          <p class="small muted">Este desglose es interno: el cliente solo ve el total en la web, el PDF, el Excel y WhatsApp. Importes guardados con las tarifas vigentes al emitir la cotización (versión de tarifas ${q.pricing_version}). Los cambios de precios posteriores no la modifican.</p>
         </section>
       </div>
 
@@ -298,7 +307,7 @@ function viewServices() {
   const { services } = state.catalog;
   $('#view').innerHTML = `
     <div class="vhead"><h1>Servicios</h1><button class="btn btn-primary btn-sm" id="add">${icon('plus')}Nuevo servicio</button></div>
-    <p class="muted">Tipos de proyecto que el cliente puede elegir en el paso 1. Cada uno define cuántas páginas incluye su precio base.</p>
+    <p class="muted">Tipos de proyecto que el cliente puede elegir en el paso 1. Los precios son internos: el cliente solo ve el total al final. Si creas un servicio nuevo, revisa en <b>Preguntas</b> y <b>Funcionalidades</b> a cuáles aplica.</p>
     <div class="table-wrap"><table class="tbl"><thead><tr><th>Servicio</th><th class="num">Precio base</th><th class="num">Páginas incluidas</th><th class="num">Días base</th><th>Estado</th><th></th></tr></thead>
     <tbody>${services.map((s) => `<tr><td><span class="ti">${icon(s.icon)}<b>${esc(s.name)}</b></span><small>${esc(s.description)}</small></td>
       <td class="num"><b>${formatPEN(s.base_price)}</b></td><td class="num">${s.included_pages}</td><td class="num">${s.base_days}</td>
@@ -313,6 +322,8 @@ function viewServices() {
       { name: 'included_pages', label: 'Páginas incluidas en el precio base', type: 'number', value: s.included_pages },
       { name: 'base_days', label: 'Días hábiles base', type: 'number', value: s.base_days, help: 'Se usa para calcular el plazo estimado.' },
       { name: 'icon', label: 'Icono', type: 'select', options: ICON_NAMES.map((i) => [i, i]), value: s.icon },
+      { name: 'kind', label: 'Preguntas del cotizador', type: 'select', options: [['web', 'Página web (páginas, fotos, blog)'], ['store', 'Tienda virtual (productos)'], ['app', 'Aplicación web (procesos y usuarios)']], value: s.kind || 'web' },
+      { name: 'benefits', label: 'Beneficios principales (uno por línea; se muestran en la tarjeta)', type: 'textarea', rows: 3, value: (s.benefits || []).join('\n'), wide: true },
       { name: 'sort', label: 'Orden', type: 'number', value: s.sort },
       { name: 'active', label: 'Visible en el cotizador', type: 'checkbox', value: s.active },
     ],
@@ -326,6 +337,82 @@ function viewServices() {
   for (const b of $$('[data-edit]')) b.onclick = () => form(services.find((s) => s.id === Number(b.dataset.edit)));
 }
 
+// ---------- Preguntas ----------
+const QTYPE = { single: 'Opción única', text: 'Texto libre', feature: 'Sí / No (activa una funcionalidad)' };
+const optPrice = (x) => (x.amount === null || x.amount === undefined ? '<span class="pill pill-p">Pendiente</span>'
+  : x.price_type === 'percent_base' ? `${x.amount} % del precio base` : x.price_type === 'per_page' ? `${formatPEN(x.amount)} / página`
+  : Number(x.amount) === 0 ? '<span class="muted">Sin costo</span>' : formatPEN(x.amount));
+
+function viewQuestions() {
+  const { questions, services, features } = state.catalog;
+  const sName = (id) => services.find((s) => s.id === id)?.name.replace('Página web para ', '').replace('Página web ', '').replace('Aplicación web ', 'App ') || id;
+  const block = (step, title) => `<section class="card"><h2>${title}</h2>${questions.filter((q) => q.step === step).map((q) => `
+    <div class="q-row ${q.active ? '' : 'off'}">
+      <div class="q-row-head"><div><b>${esc(q.label)}</b>${q.required ? ' <span class="pill">Obligatoria</span>' : ''}${q.active ? '' : ' <span class="pill">Oculta</span>'}
+        <small>${QTYPE[q.type]} · ${q.services.map(sName).map(esc).join(', ') || 'Ningún servicio'}${q.show_if ? ' · Se muestra según otra respuesta' : ''}</small></div>
+        <button class="btn btn-ghost btn-sm" data-edit="${q.id}">Editar</button></div>
+      ${q.type === 'single' ? `<table class="tbl tbl-q"><tbody>${q.options.map((x) => `<tr><td>${esc(x.label)}</td><td class="num">${optPrice(x)}</td><td class="num">${x.days ? `+${x.days} días` : ''}</td></tr>`).join('')}</tbody></table>`
+        : q.type === 'feature' ? `<p class="small muted">Activa la funcionalidad “${esc(features.find((f) => f.id === q.feature_id)?.name || '—')}”: su precio se define en Funcionalidades.</p>` : '<p class="small muted">Respuesta escrita del cliente; no tiene precio.</p>'}
+    </div>`).join('')}</section>`;
+  $('#view').innerHTML = `
+    <div class="vhead"><h1>Preguntas del cotizador</h1><button class="btn btn-primary btn-sm" id="add">${icon('plus')}Nueva pregunta</button></div>
+    <p class="muted">Las preguntas cambian según el tipo de proyecto. “Sin costo” no suma al total; “Pendiente” tampoco suma y se le indica al cliente que se confirma en la propuesta. El cliente nunca ve estos importes.</p>
+    ${block(2, 'Paso 2 · Tamaño y alcance')}${block(3, 'Paso 3 · Diseño y contenido')}`;
+
+  const optRow = (x = { label: '', price_type: 'fixed', amount: null, days: 0 }) => `<tr data-id="${x.id || ''}">
+    <td><input name="o_label" value="${esc(x.label)}" aria-label="Opción"></td>
+    <td><select name="o_type">${[['fixed', 'Monto fijo'], ['per_page', 'Por página'], ['percent_base', '% del precio base']].map(([k, l]) => `<option value="${k}" ${x.price_type === k ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+    <td><input name="o_amount" value="${x.amount === null || x.amount === undefined ? '' : x.price_type === 'percent_base' ? x.amount : soles(x.amount)}" placeholder="Pendiente" inputmode="decimal" aria-label="Importe"></td>
+    <td><input name="o_days" value="${x.days || 0}" inputmode="numeric" class="w-s" aria-label="Días"></td>
+    <td><button type="button" class="icon-btn" data-del aria-label="Quitar opción">${icon('trash')}</button></td></tr>`;
+
+  const form = (q = { type: 'single', step: 2, services: [], required: 0, active: 1, options: [], sort: questions.length + 1 }) => {
+    openForm({
+      title: q.id ? 'Editar pregunta' : 'Nueva pregunta',
+      okText: 'Guardar pregunta',
+      fields: [
+        { name: 'label', label: 'Pregunta que ve el cliente', value: q.label, wide: true },
+        { name: 'short', label: 'Nombre corto (resumen y PDF)', value: q.short },
+        { name: 'key', label: 'Clave interna', value: q.key, help: q.id ? 'No la cambies si la pregunta ya se usa.' : 'Letras minúsculas y guiones bajos, por ejemplo: tipo_hosting.' },
+        { name: 'help', label: 'Texto de ayuda (opcional)', type: 'textarea', rows: 2, value: q.help, wide: true },
+        { name: 'type', label: 'Tipo de respuesta', type: 'select', options: Object.entries(QTYPE), value: q.type },
+        { name: 'step', label: 'Paso', type: 'select', options: [['2', 'Paso 2 · Alcance'], ['3', 'Paso 3 · Diseño y contenido']], value: String(q.step) },
+        { name: 'feature_id', label: 'Funcionalidad vinculada (solo tipo Sí / No)', type: 'select', options: [['', '—'], ...features.map((f) => [String(f.id), f.name])], value: String(q.feature_id || '') },
+        { name: 'sort', label: 'Orden', type: 'number', value: q.sort },
+        { name: 'required', label: 'Respuesta obligatoria', type: 'checkbox', value: q.required },
+        { name: 'active', label: 'Visible en el cotizador', type: 'checkbox', value: q.active },
+        { type: 'html', html: `<h3 class="sub-h">Se muestra en</h3><div class="compat">${services.map((s) => `<label class="check"><input type="checkbox" name="svc-${s.id}" ${q.services.includes(s.id) ? 'checked' : ''}><span>${esc(s.name)}</span></label>`).join('')}</div>
+          <h3 class="sub-h">Opciones (solo tipo Opción única)</h3>
+          <p class="small muted">Importe vacío = pendiente de configuración. 0 = sin costo. En “% del precio base” escribe el porcentaje.</p>
+          <div class="table-wrap"><table class="tbl tbl-edit"><thead><tr><th>Opción</th><th>Tipo de precio</th><th>Importe</th><th>Días</th><th></th></tr></thead>
+          <tbody id="opt-rows">${(q.options || []).map(optRow).join('')}</tbody></table></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="opt-add">${icon('plus')}Agregar opción</button>` },
+      ],
+      extraRead: () => ({
+        services: services.filter((s) => $(`#modal [name="svc-${s.id}"]`).checked).map((s) => s.id),
+        options: $$('#opt-rows tr').map((tr) => {
+          const type = tr.querySelector('[name=o_type]').value;
+          const raw = tr.querySelector('[name=o_amount]').value.trim();
+          return { id: Number(tr.dataset.id) || undefined, label: tr.querySelector('[name=o_label]').value, price_type: type,
+            amount: raw === '' ? null : type === 'percent_base' ? Number(raw.replace(',', '.')) : cents(raw), days: Number(tr.querySelector('[name=o_days]').value) || 0 };
+        }),
+      }),
+      onSave: async (v) => {
+        const body = { ...v, step: Number(v.step), feature_id: v.feature_id ? Number(v.feature_id) : null };
+        await api(q.id ? `/api/admin/questions/${q.id}` : '/api/admin/questions', { method: q.id ? 'PUT' : 'POST', body });
+        notify('Pregunta guardada. Se aplica a las nuevas cotizaciones.');
+        show('questions');
+      },
+    });
+    $('#modal').classList.add('wide');
+    $('#modal').addEventListener('close', () => $('#modal').classList.remove('wide'), { once: true });
+    $('#opt-add').onclick = () => $('#opt-rows').insertAdjacentHTML('beforeend', optRow());
+    $('#opt-rows').onclick = (e) => { if (e.target.closest('[data-del]')) e.target.closest('tr').remove(); };
+  };
+  $('#add').onclick = () => form();
+  for (const b of $$('[data-edit]')) b.onclick = () => form(questions.find((x) => x.id === Number(b.dataset.edit)));
+}
+
 // ---------- Funcionalidades ----------
 function viewFeatures() {
   const { features, services } = state.catalog;
@@ -334,15 +421,16 @@ function viewFeatures() {
     <div class="vhead"><h1>Funcionalidades</h1><button class="btn btn-primary btn-sm" id="add">${icon('plus')}Nueva funcionalidad</button></div>
     <p class="muted">Para cada servicio indica si la funcionalidad está incluida (no se cobra), disponible (se cobra su precio) o no disponible.</p>
     <div class="table-wrap"><table class="tbl tbl-matrix"><thead><tr><th>Funcionalidad</th><th class="num">Precio</th>${services.map((s) => `<th class="c" title="${esc(s.name)}">${esc(s.name.replace('Página web para ', '').replace('Página web ', '').replace('Aplicación web ', 'App '))}</th>`).join('')}<th></th></tr></thead>
-    <tbody>${features.map((f) => `<tr class="${f.active ? '' : 'off'}"><td><b>${esc(f.name)}</b><small>${esc(f.description)}</small></td><td class="num">${formatPEN(f.price)}</td>
+    <tbody>${features.map((f) => `<tr class="${f.active ? '' : 'off'}"><td><b>${esc(f.name)}</b><small>${esc(f.description)}</small></td><td class="num">${f.price === null || f.price === undefined ? '<span class="pill pill-p">Pendiente</span>' : formatPEN(f.price)}</td>
       ${services.map((s) => `<td class="c"><span class="m m-${f.compat[s.id] || 'none'}">${modeTxt[f.compat[s.id]] || '—'}</span></td>`).join('')}
       <td><button class="btn btn-ghost btn-sm" data-edit="${f.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`;
-  const form = (f = { price: 0, days: 0, active: 1, compat: {}, sort: features.length + 1 }) => openForm({
+  const form = (f = { price: null, days: 0, active: 1, compat: {}, category: 'general', sort: features.length + 1 }) => openForm({
     title: f.id ? `Editar: ${f.name}` : 'Nueva funcionalidad',
     fields: [
       { name: 'name', label: 'Nombre', value: f.name, wide: true },
       { name: 'description', label: 'Descripción', type: 'textarea', rows: 2, value: f.description, wide: true },
-      { name: 'price', label: 'Precio adicional', type: 'money', value: f.price },
+      { name: 'price', label: 'Precio adicional (vacío = pendiente)', type: 'money_opt', value: f.price, help: 'Mientras esté pendiente, no suma al total y se informa al cliente como punto por confirmar.' },
+      { name: 'category', label: 'Grupo en el paso 4', type: 'select', options: [['general', 'Funciones generales'], ['tienda', 'Funciones de tienda virtual'], ['app', 'Funciones de aplicación web']], value: f.category || 'general' },
       { name: 'days', label: 'Días hábiles adicionales', type: 'number', value: f.days },
       { name: 'sort', label: 'Orden', type: 'number', value: f.sort },
       { name: 'active', label: 'Visible en el cotizador', type: 'checkbox', value: f.active },
@@ -363,19 +451,37 @@ function viewFeatures() {
 }
 
 // ---------- Precios y reglas ----------
+function rangeRow(r) {
+  return `<tr data-id="${r.id || ''}"><td><input name="label" value="${esc(r.label)}" aria-label="Texto del rango"></td>
+    <td><input name="pages" value="${r.pages}" inputmode="numeric" class="w-s" aria-label="Páginas para el cálculo"></td>
+    <td><label class="check"><input type="checkbox" name="extra_pending" ${r.extra_pending ? 'checked' : ''}><span>Sí</span></label></td>
+    <td><button type="button" class="icon-btn" data-del aria-label="Quitar rango">${icon('trash')}</button></td></tr>`;
+}
 function optAmount(o) {
   return o.price_type === 'fixed' ? formatPEN(o.amount) : o.price_type === 'per_page' ? `${formatPEN(o.amount)} / página` : `${o.amount} %`;
 }
 
 function viewPricing() {
-  const { options, discounts, settings: s } = state.catalog;
+  const { options, discounts, settings: s, pending } = state.catalog;
+  const ranges = s.page_ranges || [];
   $('#view').innerHTML = `
     <div class="vhead"><h1>Precios y reglas</h1></div>
+    <section class="card ${pending.length ? 'card-warn' : ''}"><h2>Pendientes de configuración (${pending.length})</h2>
+      ${pending.length ? `<p class="muted small">Estos conceptos aún no tienen tarifa: no suman al total y el cliente los ve como “se confirman en la propuesta”. Asígnales un precio en <b>Preguntas</b>, <b>Funcionalidades</b>, <b>Costos aparte</b> o en los rangos de páginas.</p>
+      <ul class="pending-list">${pending.map((x) => `<li><span class="pill">${esc(x.area)}</span> ${esc(x.name)}</li>`).join('')}</ul>` : '<p class="muted small">Todos los conceptos tienen tarifa.</p>'}
+    </section>
+    <section class="card"><h2>Rangos de páginas</h2>
+      <p class="muted small">Opciones que ve el cliente en páginas web. “Páginas para el cálculo” se compara con las páginas incluidas en el paquete; la diferencia se cobra al precio por página adicional.</p>
+      <form id="ranges">
+        <div class="table-wrap"><table class="tbl tbl-edit"><thead><tr><th>Texto para el cliente</th><th>Páginas para el cálculo</th><th>Lo que pase de ese número se cotiza aparte</th><th></th></tr></thead>
+        <tbody id="range-rows">${ranges.map((r) => rangeRow(r)).join('')}</tbody></table></div>
+        <div class="row-actions"><button type="button" class="btn btn-ghost btn-sm" id="add-range">${icon('plus')}Agregar rango</button><button class="btn btn-primary btn-sm">Guardar rangos</button></div>
+      </form>
+    </section>
     <section class="card"><h2>Reglas generales</h2>
       <form id="rules" class="fields">
         ${fieldHtml({ name: 'extra_page_price', label: 'Precio por página adicional', type: 'money', value: s.extra_page_price })}
         ${fieldHtml({ name: 'extra_page_days', label: 'Días adicionales por página', type: 'number', value: s.extra_page_days })}
-        ${fieldHtml({ name: 'page_options', label: 'Opciones de cantidad de páginas', value: s.page_options, help: 'Números separados por comas. La última se muestra como “o más”.' })}
         ${fieldHtml({ name: 'surcharge_base', label: 'Base para calcular recargos por plazo', type: 'select', value: s.surcharge_base, options: [['subtotal', 'Subtotal de desarrollo (base + extras)'], ['base', 'Solo el precio base del proyecto']] })}
         ${fieldHtml({ name: 'tax_mode', label: 'Impuestos', type: 'select', value: s.tax_mode, options: [['none', 'No se muestran (precios sin impuesto)'], ['added', 'Se suman al total'], ['included', 'Ya están incluidos en los precios']] })}
         ${fieldHtml({ name: 'tax_rate', label: 'Tasa del impuesto', type: 'percent', value: s.tax_rate })}
@@ -387,7 +493,7 @@ function viewPricing() {
     </section>
 
     <section class="card"><h2>Opciones de características</h2>
-      <p class="muted small">Precios de diseño, idiomas, contenido y plazo de entrega (paso 2 del cotizador).</p>
+      <p class="muted small">Precios de diseño, textos, idiomas y plazo de entrega (paso 3 del cotizador).</p>
       ${Object.keys(GROUP_TITLE).map((g) => `<h3 class="sub-h">${GROUP_TITLE[g]} <button class="link" data-addopt="${g}">Agregar opción</button></h3>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Opción</th><th>Tipo de precio</th><th class="num">Importe</th><th class="num">Días</th><th class="num">Factor plazo</th><th></th></tr></thead><tbody>
       ${options.filter((o) => o.grp === g).map((o) => `<tr class="${o.active ? '' : 'off'}"><td><b>${esc(o.label)}</b>${o.is_default ? ' <span class="pill">Por defecto</span>' : ''}<small>${esc(o.description)}</small></td>
@@ -405,12 +511,24 @@ function viewPricing() {
         <td class="row-actions"><button class="btn btn-ghost btn-sm" data-disc="${d.id}">Editar</button><button class="icon-btn" data-deldisc="${d.id}" aria-label="Eliminar ${esc(d.name)}">${icon('trash')}</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">No hay descuentos.</p>'}
     </section>`;
 
+  $('#add-range').onclick = () => $('#range-rows').insertAdjacentHTML('beforeend', rangeRow({ label: '', pages: 1, extra_pending: 0 }));
+  $('#range-rows').onclick = (e) => { if (e.target.closest('[data-del]')) e.target.closest('tr').remove(); };
+  $('#ranges').onsubmit = async (e) => {
+    e.preventDefault();
+    const page_ranges = $$('#range-rows tr').map((tr) => ({
+      id: Number(tr.dataset.id) || undefined, label: tr.querySelector('[name=label]').value,
+      pages: Number(tr.querySelector('[name=pages]').value), extra_pending: tr.querySelector('[name=extra_pending]').checked,
+    }));
+    try { await api('/api/admin/settings', { method: 'PUT', body: { page_ranges } }); notify('Rangos guardados.'); show('pricing'); }
+    catch (ex) { notify(ex.message, 'error'); }
+  };
+
   $('#rules').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
     try {
       await api('/api/admin/settings', { method: 'PUT', body: {
-        extra_page_price: cents(f.extra_page_price.value), extra_page_days: Number(f.extra_page_days.value), page_options: f.page_options.value,
+        extra_page_price: cents(f.extra_page_price.value), extra_page_days: Number(f.extra_page_days.value),
         surcharge_base: f.surcharge_base.value, tax_mode: f.tax_mode.value, tax_rate: Number(f.tax_rate.value), tax_label: f.tax_label.value,
         rates_valid_from: f.rates_valid_from.value, rates_valid_to: f.rates_valid_to.value,
       } });
@@ -480,17 +598,21 @@ function viewRecurring() {
   const { recurring } = state.catalog;
   $('#view').innerHTML = `
     <div class="vhead"><h1>Costos aparte</h1><button class="btn btn-primary btn-sm" id="add">${icon('plus')}Agregar</button></div>
-    <p class="muted">Servicios que pueden generar pagos adicionales o recurrentes. Se muestran separados del precio de desarrollo en la web y en el PDF; nunca se suman al total.</p>
-    <div class="table-wrap"><table class="tbl"><thead><tr><th>Servicio</th><th>Condición</th><th>Referencia</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${recurring.map((r) => `<tr class="${r.active ? '' : 'off'}"><td><b>${esc(r.name)}</b><small>${esc(r.description)}</small></td><td>${REC_STATUS[r.status]}</td><td>${esc(r.reference)}</td>
+    <p class="muted">Servicios que pueden generar pagos adicionales o recurrentes. Se muestran separados del precio de desarrollo y nunca se suman al total. Los que el cliente puede marcar se totalizan aparte por periodo (mensual, anual).</p>
+    <div class="table-wrap"><table class="tbl"><thead><tr><th>Servicio</th><th>Condición</th><th class="num">Precio</th><th>Periodicidad</th><th>El cliente puede elegirlo</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${recurring.map((r) => `<tr class="${r.active ? '' : 'off'}"><td><b>${esc(r.name)}</b><small>${esc(r.description)}</small></td><td>${REC_STATUS[r.status]}</td>
+      <td class="num">${r.price === null || r.price === undefined ? (r.selectable ? '<span class="pill pill-p">Pendiente</span>' : '—') : formatPEN(r.price)}</td><td>${esc(PERIOD_LABEL[r.period] || r.period || '')}</td><td>${r.selectable ? 'Sí (paso 4)' : 'No'}</td>
       <td>${r.active ? '<span class="pill st-aceptada">Visible</span>' : '<span class="pill">Oculto</span>'}</td><td><button class="btn btn-ghost btn-sm" data-edit="${r.id}">Editar</button></td></tr>`).join('')}</tbody></table></div>`;
-  const form = (r = { status: 'separado', active: 1, sort: recurring.length + 1 }) => openForm({
+  const form = (r = { status: 'separado', active: 1, price: null, period: 'mensual', selectable: 0, sort: recurring.length + 1 }) => openForm({
     title: r.id ? `Editar: ${r.name}` : 'Nuevo costo aparte',
     fields: [
       { name: 'name', label: 'Nombre', value: r.name, wide: true },
       { name: 'description', label: 'Descripción', type: 'textarea', rows: 2, value: r.description, wide: true },
       { name: 'status', label: 'Condición', type: 'select', options: Object.entries(REC_STATUS), value: r.status },
       { name: 'reference', label: 'Referencia de precio o nota', value: r.reference, help: 'Ej.: “Pago anual al proveedor”.' },
+      { name: 'price', label: 'Precio (vacío = pendiente)', type: 'money_opt', value: r.price },
+      { name: 'period', label: 'Periodicidad', type: 'select', options: [['mensual', 'Mensual'], ['anual', 'Anual'], ['unico', 'Pago único']], value: r.period || 'mensual' },
+      { name: 'selectable', label: 'El cliente puede marcarlo en el paso 4', type: 'checkbox', value: r.selectable },
       { name: 'sort', label: 'Orden', type: 'number', value: r.sort },
       { name: 'active', label: 'Visible', type: 'checkbox', value: r.active },
     ],

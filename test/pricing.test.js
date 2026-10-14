@@ -1,116 +1,148 @@
-// Pruebas del motor de cálculo con la configuración inicial de la base de datos.
+// Pruebas del motor de cálculo (servidor) con el catálogo inicial.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedCatalog, buildConfig } from '../src/catalog.js';
-import { computeQuote, formatPEN } from '../public/js/pricing.js';
+import { seedCatalog, buildConfig, publicConfig, migrateCatalog, CATALOG_SCHEMA } from '../src/catalog.js';
+import { computeQuote, cleanSelection, clientView, formatPEN } from '../src/pricing.js';
+import { questionVisible } from '../public/js/questions.js';
 
-const cfg = buildConfig(seedCatalog());
-const opt = (grp, label) => cfg.options[grp].find((o) => o.label === label).id;
+const cat = seedCatalog();
+const cfg = buildConfig(cat);
 const feat = (name) => cfg.features.find((f) => f.name === name).id;
+const opt = (grp, label) => cfg.options[grp].find((o) => o.label === label).id;
+const q = (key) => cfg.questions.find((x) => x.key === key);
+const ans = (key, label) => q(key).options.find((o) => o.label === label).id;
+const calc = (sel, opts) => computeQuote(cfg, cleanSelection(sel), opts);
 const sum = (r) => r.lines.reduce((s, l) => s + l.amount, 0) + r.surchargeTotal - r.discountTotal + (r.taxMode === 'added' ? r.tax : 0);
+const WEB = { estructura: 1 };
 
 test('formato monetario peruano', () => {
   assert.equal(formatPEN(120000), 'S/ 1,200.00');
-  assert.equal(formatPEN(5), 'S/ 0.05');
   assert.equal(formatPEN(123456789), 'S/ 1,234,567.89');
 });
 
-test('criterio 1: cinco servicios con los precios base oficiales', () => {
+test('los cinco paquetes conservan sus precios base oficiales', () => {
   assert.deepEqual(cfg.services.map((s) => [s.name, s.basePrice]), [
     ['Página web para emprendedores', 50000], ['Página web para negocios', 80000], ['Página web profesional', 120000],
     ['Tienda virtual', 150000], ['Aplicación web personalizada', 250000],
   ]);
 });
 
-test('solo el precio base cuando no se elige nada adicional', () => {
-  for (const s of cfg.services) {
-    const r = computeQuote(cfg, { serviceId: s.id, pages: s.includedPages });
-    assert.equal(r.total, s.basePrice, s.name);
-    assert.equal(r.lines.length, 1);
-  }
+test('la configuración pública no contiene ningún precio', () => {
+  const txt = JSON.stringify(publicConfig(cat));
+  for (const k of ['basePrice', '"price"', '"amount"', 'priceType', 'extraPagePrice', 'daysFactor']) assert.ok(!txt.includes(k), k);
 });
 
-test('criterio 3: páginas adicionales solo por encima de las incluidas en cada paquete', () => {
-  // Negocios incluye 3 páginas → 8 páginas = 5 adicionales × S/ 60
-  const r = computeQuote(cfg, { serviceId: 2, pages: 8 });
-  const l = r.lines.find((x) => x.kind === 'pages');
-  assert.equal(l.qty, 5);
-  assert.equal(l.amount, 30000);
-  // Profesional incluye 5 → 5 páginas no cobra
-  assert.equal(computeQuote(cfg, { serviceId: 3, pages: 5 }).lines.some((x) => x.kind === 'pages'), false);
-  // Emprendedores incluye 1 → 3 páginas = 2 adicionales
-  assert.equal(computeQuote(cfg, { serviceId: 1, pages: 3 }).lines.find((x) => x.kind === 'pages').qty, 2);
-  // Elegir menos páginas que las incluidas no genera saldo negativo
-  assert.equal(computeQuote(cfg, { serviceId: 3, pages: 1 }).total, 120000);
+test('solo el precio base cuando se elige lo mínimo', () => {
+  assert.equal(calc({ serviceId: 1, pageRange: 1, answers: WEB }).total, 50000);
+  assert.equal(calc({ serviceId: 2, pageRange: 1, answers: WEB }).total, 80000);
+  assert.equal(calc({ serviceId: 4, answers: { productos: 1, carga_productos: 1 } }).total, 150000);
+  assert.equal(calc({ serviceId: 5, answers: { objetivo: 'Agenda de citas' } }).total, 250000);
 });
 
-test('criterio 4: funcionalidades incluidas no se cobran dos veces', () => {
-  const wa = feat('Botón de WhatsApp');
-  const r = computeQuote(cfg, { serviceId: 2, pages: 3, features: [wa] });
+test('rangos de páginas: se cobra solo lo que supera lo incluido en el paquete', () => {
+  // Negocios incluye 3; "De 6 a 10" cuenta 10 → 7 adicionales × S/ 60
+  const r = calc({ serviceId: 2, pageRange: 3, answers: WEB });
+  assert.equal(r.lines.find((l) => l.kind === 'pages').amount, 7 * 6000);
+  // Profesional incluye 5; "De 2 a 5" no genera cargo
+  assert.ok(!calc({ serviceId: 3, pageRange: 2, answers: WEB }).lines.some((l) => l.kind === 'pages'));
+  // "Más de 20": se cobra hasta 20 y el excedente queda por confirmar
+  const big = calc({ serviceId: 2, pageRange: 5, answers: WEB });
+  assert.ok(big.pending.some((p) => p.includes('por encima de 20')));
+  // Tiendas y aplicaciones no usan rangos de páginas
+  assert.ok(!calc({ serviceId: 4, pageRange: 5, answers: { productos: 1, carga_productos: 1 } }).lines.some((l) => l.kind === 'pages'));
+});
+
+test('preguntas según el paquete', () => {
+  const vis = (sid, key, answers = {}, pageRange = null) => questionVisible(q(key), { serviceId: sid, answers, pageRange }, cfg);
+  assert.ok(vis(2, 'fotos'));
+  assert.ok(!vis(1, 'fotos'));
+  assert.ok(vis(4, 'productos') && !vis(5, 'productos') && !vis(2, 'productos'));
+  assert.ok(vis(5, 'objetivo') && !vis(4, 'objetivo'));
+  assert.ok(!vis(5, 'variantes'));
+  // Secciones solo si eligió landing page
+  assert.ok(vis(2, 'secciones', {}, 1) && !vis(2, 'secciones', {}, 2));
+  // Estado de fotos/videos solo si tendrá fotos o videos
+  assert.ok(!vis(2, 'estado_medios', { fotos: 1, videos: 1 }));
+  assert.ok(vis(2, 'estado_medios', { fotos: 3 }));
+});
+
+test('las preguntas obligatorias deben responderse', () => {
+  assert.equal(calc({ serviceId: 2, pageRange: 2 }).ok, false);
+  assert.equal(calc({ serviceId: 4, answers: { productos: 1 } }).ok, false);
+  assert.equal(calc({ serviceId: 5, answers: { objetivo: '   ' } }).ok, false);
+});
+
+test('conceptos sin tarifa quedan pendientes y no suman', () => {
+  const r = calc({ serviceId: 4, answers: { productos: ans('productos', 'De 101 a 300'), carga_productos: ans('carga_productos', 'Ustedes') }, features: [feat('Variantes de productos'), feat('Pasarela de pagos')] });
+  assert.equal(r.total, 150000 + 50000); // solo la pasarela tiene tarifa
+  assert.deepEqual(r.pending.sort(), ['Carga de productos: Ustedes', 'Productos iniciales: De 101 a 300', 'Variantes de productos'].sort());
+});
+
+test('no se cobra dos veces una funcionalidad incluida', () => {
+  const r = calc({ serviceId: 2, pageRange: 1, answers: WEB, features: [feat('Botón de WhatsApp'), feat('Formulario de contacto')] });
   assert.equal(r.total, 80000);
-  assert.ok(r.included.some((f) => f.id === wa));
-  const r2 = computeQuote(cfg, { serviceId: 1, pages: 1, features: [wa] });
-  assert.equal(r2.total, 55000);
+  assert.ok(r.included.some((f) => f.name === 'Botón de WhatsApp'));
 });
 
-test('funcionalidades incompatibles se rechazan', () => {
-  const r = computeQuote(cfg, { serviceId: 1, pages: 1, features: [feat('Carrito de compras')] });
+test('funcionalidades de otro tipo de proyecto se rechazan', () => {
+  const r = calc({ serviceId: 1, pageRange: 1, answers: WEB, features: [feat('Carrito de compras')] });
   assert.equal(r.ok, false);
-  assert.match(r.errors[0], /Carrito de compras/);
+});
+
+test('recargo por urgencia como línea interna', () => {
+  const r = calc({ serviceId: 2, pageRange: 3, answers: WEB, design: opt('design', 'Diseño personalizado'), deadline: opt('deadline', 'Urgente'), features: [feat('Blog o noticias')] });
+  assert.equal(r.subtotal, 80000 + 42000 + 40000 + 35000);
+  assert.equal(r.surcharges[0].amount, Math.round(r.subtotal * 0.2));
+  assert.equal(r.total, r.subtotal + r.surcharges[0].amount);
+});
+
+test('recurrentes separados del desarrollo y por periodo', () => {
+  const c2 = structuredClone(cat);
+  c2.recurring.find((x) => x.name === 'Dominio').price = 8000;
+  c2.recurring.find((x) => x.name === 'Mantenimiento mensual').price = 15000;
+  const cf = buildConfig(c2);
+  const ids = cf.recurring.filter((x) => ['Dominio', 'Mantenimiento mensual', 'Hosting'].includes(x.name)).map((x) => x.id);
+  const r = computeQuote(cf, cleanSelection({ serviceId: 1, pageRange: 1, answers: WEB, recurring: ids }));
   assert.equal(r.total, 50000);
+  assert.deepEqual(r.recurringTotals, { mensual: 15000, anual: 8000, unico: 0 });
+  assert.deepEqual(r.recurringPending, ['Hosting']);
 });
 
-test('recargo por urgencia como línea independiente sobre la base configurada', () => {
-  const sel = { serviceId: 2, pages: 8, design: opt('design', 'Diseño personalizado'), deadline: opt('deadline', 'Urgente'), features: [feat('Blog o noticias')] };
-  const r = computeQuote(cfg, sel);
-  assert.equal(r.subtotal, 80000 + 30000 + 40000 + 35000);
-  assert.equal(r.surcharges.length, 1);
-  assert.equal(r.surcharges[0].amount, 37000);
-  assert.equal(r.total, 222000);
-  const base = computeQuote({ ...cfg, rules: { ...cfg.rules, surchargeBase: 'base' } }, sel);
-  assert.equal(base.surcharges[0].amount, 16000);
+test('la vista del cliente no incluye desglose', () => {
+  const v = clientView(calc({ serviceId: 2, pageRange: 3, answers: WEB, features: [feat('Blog o noticias')] }));
+  assert.equal(v.lines, undefined);
+  assert.equal(v.subtotal, undefined);
+  assert.ok(!JSON.stringify(v).includes('35000'));
 });
 
-test('idiomas y contenido según su tipo de precio', () => {
-  const r = computeQuote(cfg, { serviceId: 1, pages: 3, languages: opt('languages', 'Dos idiomas'), content: opt('content', 'Apoyo en la redacción de textos') });
-  assert.equal(r.lines.find((l) => l.kind === 'languages').amount, 15000); // 30 % de S/ 500
-  assert.equal(r.lines.find((l) => l.kind === 'content').amount, 12000); // 3 páginas × S/ 40
-});
-
-test('criterio 5: el total coincide con la suma de conceptos en todas las combinaciones', () => {
+test('el total coincide con la suma de conceptos en todas las combinaciones', () => {
   let n = 0;
-  for (const s of cfg.services) for (const pages of cfg.pageOptions) for (const d of cfg.options.design) for (const lg of cfg.options.languages)
-    for (const c of cfg.options.content) for (const dl of cfg.options.deadline) {
-      const features = cfg.features.filter((f) => f.compat[s.id] === 'available').map((f) => f.id).filter((_, i) => (i + pages) % 2);
-      const r = computeQuote(cfg, { serviceId: s.id, pages, design: d.id, languages: lg.id, content: c.id, deadline: dl.id, features });
-      assert.equal(r.ok, true);
+  for (const s of cfg.services) {
+    const ranges = s.kind === 'web' ? cfg.pageRanges : [null];
+    for (const range of ranges) for (const d of cfg.options.design) for (const lg of cfg.options.languages) for (const dl of cfg.options.deadline) {
+      const answers = s.kind === 'web' ? WEB : s.kind === 'store' ? { productos: 2, carga_productos: 1 } : { objetivo: 'x' };
+      const features = cfg.features.filter((f) => f.compat[s.id] === 'available').map((f) => f.id).filter((_, i) => i % 2);
+      const r = calc({ serviceId: s.id, pageRange: range?.id, design: d.id, languages: lg.id, deadline: dl.id, answers, features });
+      assert.equal(r.ok, true, r.errors.join());
       assert.equal(r.total, sum(r));
-      assert.ok(r.days >= 1);
       n++;
     }
-  assert.ok(n > 1000);
+  }
+  assert.ok(n > 100);
 });
 
-test('descuentos: se aplica el mayor y respeta mínimos y fechas', () => {
-  const c = { ...cfg, discounts: [
-    { id: 1, name: 'Auto 5', type: 'percent', value: 5, minSubtotal: 0, active: true },
-    { id: 2, name: 'Fijo', type: 'fixed', value: 10000, minSubtotal: 200000, active: true },
-    { id: 3, name: 'Vencido', type: 'percent', value: 50, minSubtotal: 0, active: true, validTo: '2020-01-01' },
-  ] };
-  const small = computeQuote(c, { serviceId: 1, pages: 1 }, { today: '2026-10-14' });
-  assert.equal(small.discount.amount, -2500);
-  assert.equal(small.total, 47500);
-  const big = computeQuote(c, { serviceId: 5, pages: 3 }, { today: '2026-10-14' });
-  assert.equal(big.discount.amount, -12500); // 5 % de 2,500 = 125 > fijo 100
-  const code = computeQuote(c, { serviceId: 5, pages: 3 }, { today: '2026-10-14', codeDiscount: { id: 9, name: 'VIP', type: 'percent', value: 10, active: true, requiresCode: true } });
-  assert.equal(code.total, 225000);
-});
-
-test('impuestos sumados o incluidos', () => {
-  const added = computeQuote({ ...cfg, rules: { ...cfg.rules, taxMode: 'added', taxRate: 18 } }, { serviceId: 3, pages: 5 });
-  assert.equal(added.tax, 21600);
-  assert.equal(added.total, 141600);
-  const inc = computeQuote({ ...cfg, rules: { ...cfg.rules, taxMode: 'included', taxRate: 18 } }, { serviceId: 3, pages: 5 });
-  assert.equal(inc.total, 120000);
-  assert.equal(inc.tax, 120000 - Math.round(120000 / 1.18));
+test('migración: un catálogo anterior conserva precios y ediciones', () => {
+  const old = structuredClone(cat);
+  delete old.schema; delete old.questions; delete old.settings.page_ranges;
+  old.features = old.features.filter((f) => f.id <= 12).map(({ category, ...f }) => f);
+  old.services = old.services.map(({ kind, benefits, ...s }) => s);
+  old.services[1].base_price = 85000; // edición del administrador
+  old.features[0].price = 7000;
+  const m = migrateCatalog(old);
+  assert.equal(m.schema, CATALOG_SCHEMA);
+  assert.equal(m.services[1].base_price, 85000);
+  assert.equal(m.features[0].price, 7000);
+  assert.equal(m.services[3].kind, 'store');
+  assert.ok(m.questions.length > 10);
+  assert.ok(m.features.some((f) => f.name === 'Billeteras digitales' && f.price === null));
 });

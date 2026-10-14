@@ -2,7 +2,8 @@
 import crypto from 'node:crypto';
 import { buildConfig, mapDiscount, recurringItems } from './catalog.js';
 import { getCatalog, nextQuoteNumbers, insertQuote, getQuoteByToken, updateQuote, getQuote, nowUtc } from './repo.js';
-import { computeQuote, formatPEN } from '../public/js/pricing.js';
+import { computeQuote, cleanSelection, formatPEN } from './pricing.js';
+import { PERIOD_LABEL } from '../public/js/questions.js';
 import { validateClient, normalizePhone, CHANNELS } from '../public/js/formOptions.js';
 import { HttpError } from './http.js';
 
@@ -27,15 +28,6 @@ export function findCodeDiscount(catalog, code) {
   return mapDiscount(row);
 }
 
-function cleanSelection(s = {}) {
-  const int = (v) => (v === null || v === undefined || v === '' ? null : Number.parseInt(v, 10));
-  return {
-    serviceId: int(s.serviceId), pages: int(s.pages),
-    design: int(s.design), languages: int(s.languages), content: int(s.content), deadline: int(s.deadline),
-    features: Array.isArray(s.features) ? s.features.slice(0, 50).map((x) => int(x)).filter(Number.isInteger) : [],
-  };
-}
-
 const hist = (actor, action, note, extra = {}) => ({ at: nowUtc(), actor, action, note, ...extra });
 
 /**
@@ -47,7 +39,7 @@ export async function createQuote(store, body) {
   const c = body.client || {};
   const data = {
     name: String(c.name || '').trim(), company: String(c.company || '').trim(), email: String(c.email || '').trim().toLowerCase(),
-    whatsapp: String(c.whatsapp || '').trim(), hasDomain: c.hasDomain, budget: c.budget || '', desiredDeadline: c.desiredDeadline || '',
+    whatsapp: String(c.whatsapp || '').trim(), hasDomain: c.hasDomain || '', budget: c.budget || '', desiredDeadline: c.desiredDeadline || '',
     description: String(c.description || '').trim(), consent: body.consent === true,
   };
   const fieldErrors = validateClient(data);
@@ -98,8 +90,14 @@ export async function createQuote(store, body) {
     client: { name: data.name, company: data.company, email: data.email, whatsapp: phone },
     service_name: result.service.name,
     selection: result.selection,
-    characteristics: result.characteristics,
+    characteristics: result.scope,
     included: result.included,
+    features: result.features,
+    pending: result.pending,
+    recurring_selected: result.recurring,
+    recurring_totals: result.recurringTotals,
+    recurring_pending: result.recurringPending,
+    discount_name: result.discount ? result.discount.name : null,
     recurring: recurringItems(catalog),
     conditions: settings.conditions || '',
     tax_mode: result.taxMode, tax_rate: result.taxRate, tax_label: result.taxLabel,
@@ -119,19 +117,28 @@ export async function createQuote(store, body) {
   return { quote, reused: false };
 }
 
+export function recurringSummary(totals = {}, pendingNames = []) {
+  const parts = Object.entries(totals).filter(([, v]) => v > 0).map(([p, v]) => `${formatPEN(v)} ${PERIOD_LABEL[p] || p}`);
+  if (pendingNames.length) parts.push(`por confirmar: ${pendingNames.join(', ')}`);
+  return parts.join(' + ');
+}
+
+/** Mensaje para WhatsApp: alcance y total, sin precios individuales. */
 export function whatsappText(quote, pdfUrl) {
-  const { lines, client } = quote;
-  const feats = lines.filter((l) => l.kind === 'feature').map((l) => `${l.concept} (${formatPEN(l.amount)})`);
-  const extra = lines.filter((l) => l.kind === 'surcharge' || l.kind === 'discount').map((l) => `${l.concept}: ${formatPEN(l.amount)}`);
+  const { client } = quote;
+  const feats = [...(quote.features || []).map((f) => f.name), ...(quote.included || []).map((f) => f.name)];
+  const recurring = (quote.recurring_selected || []).map((r) => r.name);
   return [
     `Hola, quiero solicitar mi cotización *${quote.number}* de CotizaTuWeb.`,
     '',
     `*Proyecto:* ${quote.service_name}`,
-    ...quote.characteristics.map((c) => `• ${c.label}: ${c.value}`),
-    feats.length ? `*Funcionalidades adicionales:* ${feats.join(', ')}` : '',
-    quote.included.length ? `*Incluido en el paquete:* ${quote.included.map((f) => f.name).join(', ')}` : '',
-    ...extra,
-    `*Total estimado:* ${formatPEN(quote.total)}`,
+    ...(quote.characteristics || []).filter((c) => !c.long).map((c) => `• ${c.label}: ${c.value}`),
+    feats.length ? `*Funciones incluidas:* ${feats.join(', ')}` : '',
+    recurring.length ? `*Servicios recurrentes solicitados:* ${recurring.join(', ')}` : '',
+    '',
+    `*Total del desarrollo:* ${formatPEN(quote.total)}`,
+    recurring.length ? `*Pagos recurrentes:* ${recurringSummary(quote.recurring_totals, quote.recurring_pending)}` : '',
+    (quote.pending || []).length ? `*Por confirmar en la propuesta:* ${quote.pending.join(', ')}` : '',
     `*Plazo estimado:* ${quote.days} días hábiles`,
     '',
     `*Nombre:* ${client.name}${client.company ? ` (${client.company})` : ''}`,

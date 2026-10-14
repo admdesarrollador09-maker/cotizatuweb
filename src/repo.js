@@ -10,14 +10,20 @@
 //   rl/<clave>         Límites de intentos
 import crypto from 'node:crypto';
 import { update } from './store.js';
-import { seedCatalog } from './catalog.js';
+import { seedCatalog, migrateCatalog, CATALOG_SCHEMA } from './catalog.js';
 
 export const nowUtc = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 export const sha = (t) => crypto.createHash('sha256').update(String(t)).digest('hex');
 
 export async function getCatalog(store) {
   const cur = await store.get('catalog');
-  if (cur) return cur.data;
+  if (cur && (cur.data.schema || 1) >= CATALOG_SCHEMA) return cur.data;
+  if (cur) {
+    // Catálogo de una versión anterior: se amplía conservando precios y ediciones.
+    const { data } = await update(store, 'catalog', (cat) => { migrateCatalog(cat); }, seedCatalog);
+    await logChange(store, 'sistema', 'Catálogo actualizado al cotizador de 5 pasos (precios existentes conservados).');
+    return data;
+  }
   await store.set('catalog', seedCatalog(), { onlyIfNew: true });
   return (await store.get('catalog')).data;
 }

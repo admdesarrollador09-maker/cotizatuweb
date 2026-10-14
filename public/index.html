@@ -35,13 +35,13 @@
       <div class="wrap hero-in">
         <div class="hero-copy">
           <h1>Tu próxima página web empieza aquí</h1>
-          <p class="lead">Elige el tipo de proyecto, marca lo que necesitas y mira el precio en soles al instante. Sin formularios eternos ni “te llamamos para darte un precio”.</p>
+          <p class="lead">Elige el tipo de proyecto, responde unas preguntas sobre lo que necesitas y recibe tu cotización en soles al instante. Sin formularios eternos ni “te llamamos para darte un precio”.</p>
           <div class="hero-actions">
             <a class="btn btn-primary btn-lg" href="#cotizador">Cotiza tu página web</a>
             <a class="btn btn-wa btn-lg" data-wa hidden target="_blank" rel="noopener">Hablar por WhatsApp</a>
           </div>
           <ul class="benefits">
-            <li><span class="b-ico" data-icon="eye"></span><div><strong>Presupuesto transparente</strong><span>Cada concepto con su precio. Sabes qué pagas y qué no.</span></div></li>
+            <li><span class="b-ico" data-icon="eye"></span><div><strong>Presupuesto transparente</strong><span>Un solo total, con todo lo que incluye y lo que va aparte.</span></div></li>
             <li><span class="b-ico" data-icon="sliders"></span><div><strong>Proyecto personalizado</strong><span>Solo pagas por las funciones que tu negocio usa.</span></div></li>
             <li><span class="b-ico" data-icon="message"></span><div><strong>Atención directa</strong><span>Hablas con quien desarrolla tu web, sin intermediarios.</span></div></li>
           </ul>
@@ -52,7 +52,7 @@
             <span class="ticket-kind">Cotización de ejemplo</span>
             <span class="ticket-num">CTW-0000</span>
           </div>
-          <p class="ticket-service" id="sample-service">Cargando tarifas…</p>
+          <p class="ticket-service" id="sample-service">Cargando ejemplo…</p>
           <ul class="ticket-lines" id="sample-lines"></ul>
           <div class="ticket-total">
             <span>Total estimado</span>
@@ -65,12 +65,13 @@
 
     <section class="how" id="como-funciona">
       <div class="wrap">
-        <h2>Cuatro pasos y tienes tu cotización</h2>
+        <h2>Cinco pasos y tienes tu cotización</h2>
         <ol class="how-steps">
           <li><strong>Elige tu proyecto</strong><span>Desde una página para emprender hasta una aplicación a medida.</span></li>
-          <li><strong>Ajusta las características</strong><span>Páginas, diseño, idiomas, contenido y plazo.</span></li>
-          <li><strong>Suma funcionalidades</strong><span>WhatsApp, reservas, pagos en línea y más. Lo incluido no se cobra dos veces.</span></li>
-          <li><strong>Recibe tu cotización</strong><span>Descárgala en PDF, envíala por WhatsApp o pide una propuesta a medida.</span></li>
+          <li><strong>Define el alcance</strong><span>Páginas, productos o procesos: preguntas según lo que necesitas.</span></li>
+          <li><strong>Diseño y contenido</strong><span>Tu identidad visual, textos, fotografías e idiomas.</span></li>
+          <li><strong>Elige funciones</strong><span>WhatsApp, pagos, reservas, reportes y más. Lo incluido no se cobra dos veces.</span></li>
+          <li><strong>Recibe tu cotización</strong><span>Un solo total, claro. Descárgala en PDF o Excel, o envíala por WhatsApp.</span></li>
         </ol>
       </div>
     </section>
@@ -84,72 +85,81 @@
           <form id="quote-form" novalidate autocomplete="on">
             <fieldset class="step" data-step="1">
               <legend>¿Qué tipo de proyecto necesitas?</legend>
-              <p class="step-help">Puedes cambiar de opción cuando quieras; tus demás elecciones se mantienen.</p>
+              <p class="step-help">Puedes cambiar de opción cuando quieras; tus demás respuestas se mantienen.</p>
               <div class="services" id="services" role="radiogroup" aria-label="Tipo de proyecto"></div>
             </fieldset>
 
             <fieldset class="step" data-step="2" hidden>
-              <legend>Configura las características</legend>
-              <p class="step-help" id="pages-help"></p>
-              <div class="config" id="config"></div>
+              <legend id="scope-title">Tamaño y alcance del proyecto</legend>
+              <p class="step-help" id="scope-help"></p>
+              <div class="config" id="scope"></div>
             </fieldset>
 
             <fieldset class="step" data-step="3" hidden>
-              <legend>Funcionalidades adicionales</legend>
-              <p class="step-help">Marca las que necesitas. Las que ya vienen en tu paquete aparecen como incluidas.</p>
-              <div class="features" id="features"></div>
+              <legend>Diseño y contenido</legend>
+              <p class="step-help">Cuéntanos con qué cuentas y qué necesitas que preparemos.</p>
+              <div class="config" id="design"></div>
             </fieldset>
 
             <fieldset class="step" data-step="4" hidden>
-              <legend>Tus datos</legend>
+              <legend>Funciones y servicios adicionales</legend>
+              <p class="step-help">Marca lo que necesitas. Lo que ya viene en tu paquete aparece como incluido.</p>
+              <div id="features"></div>
+            </fieldset>
+
+            <fieldset class="step" data-step="5" hidden>
+              <legend>Tus datos y tu cotización</legend>
               <p class="step-help">Los usamos solo para enviarte la cotización y conversar sobre tu proyecto.</p>
               <div class="fields">
-                <label class="field"><span>Nombre y apellido *</span><input name="name" autocomplete="name" maxlength="100" required><small class="err" data-err="name"></small></label>
-                <label class="field"><span>Empresa o marca</span><input name="company" autocomplete="organization" maxlength="120"><small class="err" data-err="company"></small></label>
+                <label class="field"><span>Nombre o razón social *</span><input name="name" autocomplete="name" maxlength="100" required><small class="err" data-err="name"></small></label>
+                <label class="field"><span>Nombre del proyecto o empresa *</span><input name="company" autocomplete="organization" maxlength="120" required><small class="err" data-err="company"></small></label>
                 <label class="field"><span>Correo electrónico *</span><input name="email" type="email" autocomplete="email" maxlength="254" required><small class="err" data-err="email"></small></label>
-                <label class="field"><span>WhatsApp *</span><input name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="987 654 321" maxlength="20" required><small class="err" data-err="whatsapp"></small></label>
-                <label class="field"><span>¿Tienes dominio propio? *</span><select name="hasDomain" id="f-domain" required></select><small class="err" data-err="hasDomain"></small></label>
-                <label class="field"><span>Presupuesto aproximado</span><select name="budget" id="f-budget"></select><small class="err" data-err="budget"></small></label>
-                <label class="field"><span>¿Para cuándo lo necesitas?</span><select name="desiredDeadline" id="f-desired"></select><small class="err" data-err="desiredDeadline"></small></label>
-                <label class="field field-wide"><span>Cuéntanos sobre tu proyecto *</span><textarea name="description" rows="4" maxlength="2000" placeholder="¿A qué se dedica tu negocio? ¿Qué quieres lograr con la web? ¿Tienes alguna referencia?" required></textarea><small class="err" data-err="description"></small></label>
-                <label class="hp" aria-hidden="true">Sitio web<input name="website" tabindex="-1" autocomplete="off"></label>
-                <label class="check field-wide"><input type="checkbox" name="consent" required><span>Acepto que CotizaTuWeb me contacte por correo o WhatsApp sobre esta cotización. Lee nuestra <a href="/privacidad" target="_blank">política de privacidad</a>. *</span></label>
-                <small class="err field-wide" data-err="consent"></small>
+                <label class="field"><span>WhatsApp o teléfono *</span><input name="whatsapp" type="tel" inputmode="tel" autocomplete="tel" placeholder="987 654 321" maxlength="20" required><small class="err" data-err="whatsapp"></small></label>
               </div>
+              <details class="more-fields">
+                <summary>Agregar más detalles (opcional)</summary>
+                <div class="fields">
+                  <label class="field"><span>¿Tienes dominio propio?</span><select name="hasDomain" id="f-domain"></select><small class="err" data-err="hasDomain"></small></label>
+                  <label class="field"><span>Presupuesto aproximado</span><select name="budget" id="f-budget"></select><small class="err" data-err="budget"></small></label>
+                  <label class="field"><span>¿Para cuándo lo necesitas?</span><select name="desiredDeadline" id="f-desired"></select><small class="err" data-err="desiredDeadline"></small></label>
+                  <label class="field"><span>Código de descuento</span><span class="discount-row"><input id="discount-code" maxlength="40" autocomplete="off"><button type="button" class="btn btn-ghost btn-sm" id="discount-apply">Aplicar</button></span><small id="discount-msg" aria-live="polite"></small></label>
+                  <label class="field field-wide"><span>Comentarios sobre tu proyecto</span><textarea name="description" rows="3" maxlength="2000" placeholder="Referencias, fechas importantes o cualquier detalle que debamos saber."></textarea><small class="err" data-err="description"></small></label>
+                </div>
+              </details>
+              <label class="hp" aria-hidden="true">Sitio web<input name="website" tabindex="-1" autocomplete="off"></label>
+              <label class="check consent"><input type="checkbox" name="consent" required><span>Acepto que CotizaTuWeb me contacte por correo o WhatsApp sobre esta cotización. Lee nuestra <a href="/privacidad" target="_blank">política de privacidad</a>. *</span></label>
+              <small class="err" data-err="consent"></small>
 
+              <section class="final" id="final" aria-live="polite"></section>
               <div class="finish">
-                <h3>¿Cómo quieres recibir tu cotización?</h3>
-                <div class="finish-actions">
-                  <button type="button" class="btn btn-primary" data-action="pdf"><span data-icon="download"></span>Descargar PDF</button>
+                <div class="finish-actions" id="pre-actions">
+                  <button type="button" class="btn btn-primary btn-lg" data-action="web"><span data-icon="file"></span>Generar mi cotización</button>
+                </div>
+                <div class="finish-actions" id="post-actions" hidden>
+                  <a class="btn btn-primary" id="dl-pdf" href="#"><span data-icon="download"></span>Descargar PDF</a>
+                  <a class="btn btn-ghost" id="dl-xlsx" href="#"><span data-icon="download"></span>Descargar Excel</a>
                   <button type="button" class="btn btn-wa" data-action="whatsapp" hidden><span data-icon="whatsapp"></span>Enviar por WhatsApp</button>
                   <button type="button" class="btn btn-ghost" data-action="propuesta"><span data-icon="send"></span>Solicitar propuesta personalizada</button>
                 </div>
+                <button type="button" class="link-btn" id="edit-config">Volver a editar la configuración</button>
                 <div class="status" id="status" role="status" aria-live="polite"></div>
               </div>
             </fieldset>
 
             <div class="step-nav">
               <button type="button" class="btn btn-ghost" id="prev">Anterior</button>
-              <button type="button" class="btn btn-primary" id="next">Siguiente</button>
+              <button type="button" class="btn btn-primary" id="next">Continuar</button>
             </div>
           </form>
         </div>
 
-        <aside class="summary" id="summary" aria-label="Resumen de tu cotización">
+        <aside class="summary" id="summary" aria-label="Resumen de tu proyecto">
           <div class="summary-card">
             <div class="summary-head">
-              <h3>Tu cotización</h3>
+              <h3>Tu proyecto</h3>
               <button type="button" class="summary-close" id="summary-close" aria-label="Cerrar resumen"></button>
             </div>
             <div id="summary-body"><p class="muted">Elige un tipo de proyecto para empezar.</p></div>
-            <div class="discount" id="discount-box">
-              <label for="discount-code">¿Tienes un código de descuento?</label>
-              <div class="discount-row">
-                <input id="discount-code" maxlength="40" autocomplete="off">
-                <button type="button" class="btn btn-ghost btn-sm" id="discount-apply">Aplicar</button>
-              </div>
-              <small id="discount-msg" aria-live="polite"></small>
-            </div>
           </div>
         </aside>
       </div>
@@ -165,8 +175,8 @@
   </main>
 
   <div class="mbar" id="mbar">
-    <div><small>Total estimado</small><strong id="mbar-total">S/ 0.00</strong></div>
-    <button type="button" class="btn btn-primary btn-sm" id="mbar-open" aria-controls="summary" aria-expanded="false">Ver detalle</button>
+    <div><small id="mbar-step">Paso 1 de 5</small><strong id="mbar-total">Tu proyecto</strong></div>
+    <button type="button" class="btn btn-primary btn-sm" id="mbar-open" aria-controls="summary" aria-expanded="false">Ver resumen</button>
   </div>
 
   <footer class="footer">

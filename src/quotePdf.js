@@ -1,7 +1,7 @@
 // Documento PDF de la cotización. Usa solo los datos guardados (copia de precios),
 // por lo que regenerar el PDF nunca cambia los importes emitidos.
 import { PdfDoc } from './pdfwriter.js';
-import { formatPEN } from '../public/js/pricing.js';
+import { formatPEN, PERIOD_LABEL } from '../public/js/questions.js';
 
 const C = { blue: '#2563EB', purple: '#8B5CF6', dark: '#0F172A', gray: '#E5E7EB', bg: '#F8FAFC', muted: '#64748B', text: '#334155' };
 const STATUS_LABEL = { incluido: 'Incluido', opcional: 'Opcional', separado: 'Se cotiza por separado' };
@@ -23,7 +23,6 @@ function drawLogo(doc, x, y, s = 34) {
 }
 
 export function renderQuotePdf({ quote, settings }) {
-  const lines = quote.lines;
   const client = quote.client;
   const doc = new PdfDoc();
   const PW = doc.width;
@@ -55,11 +54,23 @@ export function renderQuotePdf({ quote, settings }) {
   });
   y += 36;
 
+  const block = (title, color) => { ensure(40); doc.text(title.toUpperCase(), M, y, { size: 8, bold: true, color, spacing: 0.6 }); y += 15; };
+  const para = (t, size = 8.8, indent = 0, bullet = false, color = C.text) => {
+    const ls = doc.wrap(t, size, CW - indent - (bullet ? 10 : 0));
+    ls.forEach((l, i) => {
+      ensure(12);
+      if (bullet && i === 0) doc.text('•', M + indent, y, { size, color: C.blue });
+      doc.text(l, M + indent + (bullet ? 10 : 0), y, { size, color });
+      y += size + 3.5;
+    });
+  };
+
   // Cliente y proyecto
   const colW = (CW - 14) / 2;
-  const chars = quote.characteristics || [];
+  const features = quote.features || (quote.lines || []).filter((l) => l.kind === 'feature').map((l) => ({ name: l.concept }));
+  const included = quote.included || [];
   const clientRows = [client.name, client.company, client.email, `WhatsApp: ${client.whatsapp}`].filter(Boolean);
-  const projRows = chars.map((c) => `${c.label}: ${c.value}`);
+  const projRows = [`${features.length + included.length} funciones incluidas`, `Plazo estimado: ${quote.days} días hábiles`];
   const boxH = Math.max(clientRows.length, projRows.length + 1) * 13 + 34;
   doc.rect(M, y, colW, boxH, { fill: C.bg, radius: 8 });
   doc.rect(M + colW + 14, y, colW, boxH, { fill: C.bg, radius: 8 });
@@ -71,73 +82,68 @@ export function renderQuotePdf({ quote, settings }) {
   projRows.forEach((r, i) => doc.text(r, px, y + 39 + i * 13, { size: 9, color: C.text }));
   y += boxH + 22;
 
-  // Detalle de servicios
-  const cols = { concept: M + 10, qty: M + CW - 200, unit: M + CW - 150, amount: M + CW - 80 };
-  const header = () => {
-    doc.rect(M, y, CW, 22, { fill: C.dark, radius: 5 });
-    doc.text('Detalle de servicios', cols.concept, y + 7, { size: 8.5, bold: true, color: '#FFFFFF' });
-    doc.text('Cant.', cols.qty, y + 7, { size: 8.5, bold: true, color: '#FFFFFF', align: 'right', width: 30 });
-    doc.text('P. unitario', cols.unit, y + 7, { size: 8.5, bold: true, color: '#FFFFFF', align: 'right', width: 62 });
-    doc.text('Importe', cols.amount, y + 7, { size: 8.5, bold: true, color: '#FFFFFF', align: 'right', width: 70 });
-    y += 28;
-  };
-  header();
-  const items = lines.filter((l) => l.kind !== 'surcharge' && l.kind !== 'discount');
-  const conceptW = cols.qty - cols.concept - 20;
-  for (const l of items) {
-    const cl = doc.wrap(l.concept, 9.5, conceptW, true);
-    const dl = l.detail ? doc.wrap(l.detail, 8, conceptW) : [];
-    const h = cl.length * 12 + dl.length * 10 + 10;
-    if (ensure(h)) header();
-    cl.forEach((t, i) => doc.text(t, cols.concept, y + i * 12, { size: 9.5, bold: true }));
-    dl.forEach((t, i) => doc.text(t, cols.concept, y + cl.length * 12 + i * 10, { size: 8, color: C.muted }));
-    doc.text(String(l.qty), cols.qty, y, { size: 9.5, align: 'right', width: 30 });
-    doc.text(formatPEN(l.unit_price), cols.unit, y, { size: 9.5, align: 'right', width: 62 });
-    doc.text(formatPEN(l.amount), cols.amount, y, { size: 9.5, bold: true, align: 'right', width: 70 });
-    y += h - 4;
-    doc.line(M, y, M + CW, y);
+  // Alcance del proyecto (sin precios individuales)
+  const scope = quote.characteristics || [];
+  if (scope.length) {
+    block('Alcance del proyecto', C.blue);
+    const lw = 170;
+    for (const s of scope) {
+      const vl = doc.wrap(String(s.value), 9, CW - lw - 10);
+      ensure(vl.length * 12 + 6);
+      doc.text(s.label, M, y, { size: 9, color: C.muted });
+      vl.forEach((t, i) => doc.text(t, M + lw, y + i * 12, { size: 9, bold: !s.long, color: C.dark }));
+      y += vl.length * 12 + 4;
+      doc.line(M, y - 1, M + CW, y - 1, { color: '#EEF0F3', width: 0.6 });
+      y += 3;
+    }
+    y += 10;
+  }
+
+  if (features.length || included.length) {
+    block('Funciones incluidas', C.purple);
+    for (const f of features) para(f.name, 9, 0, true, C.dark);
+    for (const f of included) para(`${f.name} (incluido en el paquete)`, 9, 0, true, C.dark);
     y += 8;
   }
 
-  // Totales
-  const totals = [['Subtotal de desarrollo', quote.subtotal, false]];
-  for (const l of lines.filter((x) => x.kind === 'surcharge')) totals.push([l.concept, l.amount, false]);
-  for (const l of lines.filter((x) => x.kind === 'discount')) totals.push([l.concept, l.amount, false]);
-  if (quote.tax_mode === 'added') totals.push([`${quote.tax_label} (${quote.tax_rate} %)`, quote.tax, false]);
-  ensure(totals.length * 16 + 60);
-  const tx = M + CW - 260;
+  const recSel = quote.recurring_selected || [];
+  if (recSel.length) {
+    block('Servicios recurrentes solicitados', C.blue);
+    for (const r of recSel) para(`${r.name} (${PERIOD_LABEL[r.period] || r.period})`, 9, 0, true, C.dark);
+    y += 8;
+  }
+
+  if ((quote.pending || []).length) {
+    block('Por confirmar en la propuesta', C.purple);
+    para('Estos puntos de tu proyecto se cotizan en la propuesta final y no están incluidos en el total:', 8.5);
+    for (const p of quote.pending) para(p, 8.8, 0, true);
+    y += 8;
+  }
+
+  // Total (único precio visible)
+  const recTotals = Object.entries(quote.recurring_totals || {}).filter(([, v]) => v > 0);
+  ensure(90 + recTotals.length * 16);
   y += 4;
-  for (const [k, v] of totals) {
-    doc.text(k, tx, y, { size: 9.5, color: C.text });
-    doc.text(formatPEN(v), tx, y, { size: 9.5, align: 'right', width: 260, color: v < 0 ? '#16A34A' : C.dark });
+  doc.rect(M, y, CW, 46, { fill: C.dark, radius: 9 });
+  doc.text('TOTAL DEL DESARROLLO', M + 18, y + 18, { size: 10, bold: true, color: '#FFFFFF', spacing: 0.8 });
+  doc.text(formatPEN(quote.total), M, y + 13, { size: 20, bold: true, color: '#FFFFFF', align: 'right', width: CW - 18 });
+  y += 54;
+  const notes = [];
+  if (quote.tax_mode === 'added') notes.push(`Incluye ${quote.tax_label} (${quote.tax_rate} %).`);
+  else if (quote.tax_mode === 'included') notes.push(`Precio con ${quote.tax_label} incluido.`);
+  else notes.push(`Importes en soles (PEN). No incluye ${quote.tax_label || 'impuestos'}.`);
+  if (quote.discount_name) notes.push(`Incluye el descuento "${quote.discount_name}".`);
+  doc.text(notes.join(' '), M, y, { size: 8, color: C.muted, align: 'right', width: CW });
+  y += 16;
+  for (const [p, v] of recTotals) {
+    doc.text(`Pago recurrente ${PERIOD_LABEL[p] || p}`, M, y, { size: 9.5, color: C.text });
+    doc.text(formatPEN(v), M, y, { size: 9.5, bold: true, align: 'right', width: CW });
     y += 16;
   }
-  doc.rect(tx - 12, y, 272, 34, { fill: C.dark, radius: 7 });
-  doc.text('TOTAL', tx, y + 11, { size: 10, bold: true, color: '#FFFFFF', spacing: 0.8 });
-  doc.text(formatPEN(quote.total), tx, y + 9, { size: 15, bold: true, color: '#FFFFFF', align: 'right', width: 248 });
-  y += 40;
-  const taxNote = quote.tax_mode === 'included' ? `Precio incluye ${quote.tax_label} (${quote.tax_rate} %): ${formatPEN(quote.tax)}.`
-    : quote.tax_mode === 'none' ? `Importes en soles (PEN). No incluye ${quote.tax_label || 'impuestos'}.` : 'Importes en soles (PEN).';
-  doc.text(taxNote, tx - 12, y, { size: 7.5, color: C.muted, align: 'right', width: 272 });
-  y += 22;
-
-  const block = (title, color) => { ensure(40); doc.text(title.toUpperCase(), M, y, { size: 8, bold: true, color, spacing: 0.6 }); y += 15; };
-  const para = (t, size = 8.8, indent = 0, bullet = false) => {
-    const ls = doc.wrap(t, size, CW - indent - (bullet ? 10 : 0));
-    ls.forEach((l, i) => {
-      ensure(12);
-      if (bullet && i === 0) doc.text('•', M + indent, y, { size, color: C.blue });
-      doc.text(l, M + indent + (bullet ? 10 : 0), y, { size, color: C.text });
-      y += size + 3.5;
-    });
-  };
-
-  const included = quote.included || [];
-  if (included.length) {
-    block('Incluido en el paquete sin costo adicional', C.blue);
-    para(included.map((f) => f.name).join(' · '));
-    y += 10;
+  if ((quote.recurring_pending || []).length) {
+    para(`Pagos recurrentes por confirmar: ${quote.recurring_pending.join(', ')}.`, 8.5);
   }
+  y += 14;
 
   if (quote.conditions) {
     block('Condiciones comerciales', C.purple);
@@ -145,7 +151,7 @@ export function renderQuotePdf({ quote, settings }) {
     y += 10;
   }
 
-  const recurring = quote.recurring || [];
+  const recurring = (quote.recurring || []).filter((r) => !recSel.some((x) => x.id === r.id));
   if (recurring.length) {
     ensure(recurring.length * 14 + 50); // mantener la tabla completa en una sola página
     block('Servicios no incluidos en el precio de desarrollo', C.blue);
